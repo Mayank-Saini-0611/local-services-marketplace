@@ -1,0 +1,126 @@
+{
+  "info": {
+    "_postman_id": "e8ec859e-6f4e-4333-887c-3c91355ffe3a",
+    "name": "Local Services API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "49621769",
+    "_collection_link": "https://go.postman.co/collection/49621769-e8ec859e-6f4e-4333-887c-3c91355ffe3a?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "01 - Register",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"fullName\": \"Mayank Saini\",\r\n  \"email\": \"mayank@example.com\",\r\n  \"password\": \"secure123\",\r\n  \"phone\": \"9876543210\",\r\n  \"role\": \"customer\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "02 - Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Automatically save JWT token to environment after successful login\r",
+              "if (pm.response.code === 200) {\r",
+              "    const response = pm.response.json();\r",
+              "    if (response.token) {\r",
+              "        pm.environment.set(\"token\", response.token);\r",
+              "        console.log(\"Token saved to environment ✅\");\r",
+              "    }\r",
+              "}\r",
+              "\r",
+              "// Test: Response should be 200\r",
+              "pm.test(\"Login successful\", function () {\r",
+              "    pm.response.to.have.status(200);\r",
+              "});\r",
+              "\r",
+              "// Test: Response should contain token\r",
+              "pm.test(\"Response has token\", function () {\r",
+              "    pm.expect(pm.response.json()).to.have.property('token');\r",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"email\": \"mayank@example.com\",\r\n  \"password\": \"secure123\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "03 - Get Current User",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "type  {{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "me"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

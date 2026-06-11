@@ -1,14 +1,14 @@
 # Local Services Marketplace
 
-A full-stack web platform where local service providers can list services 
-and customers can discover and book them.
+A full-stack web platform where local service providers (plumbers, electricians, tutors, cleaners, etc.) can list their services, and customers can discover and book them.
 
 ## Tech Stack
 
-Frontend: React  
-Backend: ASP.NET Core Web API  
-Database: PostgreSQL  
-Authentication: JWT  
+- **Frontend:** React, HTML, CSS
+- **Backend:** ASP.NET Core 8 Web API
+- **Database:** PostgreSQL
+- **Authentication:** JWT (JSON Web Tokens)
+- **Password Hashing:** BCrypt
+- **API Testing:** Postman, Swagger
 
-## Author
-Mayank Saini
+## Project Structure
