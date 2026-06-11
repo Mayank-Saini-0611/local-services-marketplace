@@ -3,8 +3,8 @@ using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +27,7 @@ builder.Services.AddSwaggerGen(options =>
 
     options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
     {
-        {
+        {y
             new Microsoft.OpenApi.Models.OpenApiSecurityScheme
             {
                 Reference = new Microsoft.OpenApi.Models.OpenApiReference
@@ -41,6 +41,18 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// ✅ Add CORS — Allow React frontend to call backend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")  // Vite dev server URL
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 // Register AppDbContext with PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -48,11 +60,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Register JwtService for dependency injection
 builder.Services.AddScoped<JwtService>();
 
-
 // Disable default claim mapping (so JWT claim names stay as-is)
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
-// Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
 
@@ -88,6 +98,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// ✅ Enable CORS BEFORE Authentication
+app.UseCors("AllowReactApp");
 
 // Authentication MUST come before Authorization
 app.UseAuthentication();
