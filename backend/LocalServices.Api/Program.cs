@@ -59,6 +59,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // Register JwtService for dependency injection
 builder.Services.AddScoped<JwtService>();
+builder.Services.AddScoped<EmailService>();
 
 // Disable default claim mapping (so JWT claim names stay as-is)
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;

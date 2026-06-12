@@ -7,6 +7,9 @@ import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import BrowseServices from './pages/BrowseServices.jsx';
 import ListingDetail from './pages/ListingDetail.jsx';
 import MyListings from './pages/MyListings.jsx';
+import Bookings from './pages/Bookings.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 function App() {
   return (
     <BrowserRouter>
@@ -15,6 +18,8 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+<Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Dashboard Routes (with shared layout) */}
         <Route path="/dashboard" element={<DashboardLayout />}>
@@ -32,14 +37,7 @@ function App() {
         {/* My Listings (Providers) */}
 <Route path="my-listings" element={<MyListings />} />
           
-          {/* Placeholders */}
-          <Route path="bookings" element={
-            <PlaceholderPage 
-              title="My Bookings" 
-              description="View and manage your service bookings."
-              week="Week 6"
-            />
-          } />
+          <Route path="bookings" element={<Bookings />} />
           <Route path="favorites" element={
             <PlaceholderPage 
               title="Favorites" 

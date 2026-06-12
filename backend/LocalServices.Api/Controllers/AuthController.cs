@@ -5,6 +5,7 @@ using LocalServices.Api.Models;
 using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace LocalServices.Api.Controllers
 {
@@ -14,11 +15,15 @@ namespace LocalServices.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly JwtService _jwtService;
+        private readonly EmailService _emailService;
+        private readonly IConfiguration _configuration;
 
-        public AuthController(AppDbContext context, JwtService jwtService)
+        public AuthController(AppDbContext context, JwtService jwtService, EmailService emailService, IConfiguration configuration)
         {
             _context = context;
             _jwtService = jwtService;
+            _emailService = emailService;
+            _configuration = configuration;
         }
 
         // POST: api/auth/register
@@ -54,7 +59,6 @@ namespace LocalServices.Api.Controllers
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
 
-            // Generate JWT token for the newly registered user
             var token = _jwtService.GenerateToken(newUser);
 
             return Ok(new AuthResponseDto
@@ -76,7 +80,6 @@ namespace LocalServices.Api.Controllers
                 return BadRequest(ModelState);
             }
 
-            // 1. Find user by email
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
@@ -85,7 +88,6 @@ namespace LocalServices.Api.Controllers
                 return Unauthorized(new { message = "Invalid email or password." });
             }
 
-            // 2. Verify password (BCrypt compares plain text to hash)
             var isPasswordValid = BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash);
 
             if (!isPasswordValid)
@@ -93,10 +95,8 @@ namespace LocalServices.Api.Controllers
                 return Unauthorized(new { message = "Invalid email or password." });
             }
 
-            // 3. Generate JWT token
             var token = _jwtService.GenerateToken(user);
 
-            // 4. Return user info + token
             return Ok(new AuthResponseDto
             {
                 UserId = user.Id,
@@ -107,18 +107,11 @@ namespace LocalServices.Api.Controllers
             });
         }
 
-
-
-
-
-
-
         // GET: api/auth/me — Returns current logged-in user info
         [Microsoft.AspNetCore.Authorization.Authorize]
         [HttpGet("me")]
         public async Task<IActionResult> GetCurrentUser()
         {
-            // Get user ID from JWT token claims
             var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
 
             if (string.IsNullOrEmpty(userIdClaim))
@@ -145,11 +138,116 @@ namespace LocalServices.Api.Controllers
             });
         }
 
+        // ============================================
+        // POST: api/auth/forgot-password
+        // ============================================
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+
+            // Security: Don't reveal if email exists (prevent email enumeration attacks)
+            if (user == null)
+            {
+                return Ok(new { message = "If an account exists with this email, you'll receive a password reset link shortly." });
+            }
+
+            // Generate cryptographically secure random token (64 chars)
+            var tokenBytes = new byte[48];
+            RandomNumberGenerator.Fill(tokenBytes);
+            var rawToken = Convert.ToBase64String(tokenBytes)
+                .Replace("+", "-")
+                .Replace("/", "_")
+                .Replace("=", "");
+
+            // Hash the token before storing (so DB breach doesn't leak tokens)
+            var tokenHash = BCrypt.Net.BCrypt.HashPassword(rawToken);
+
+            // Invalidate any existing unused tokens for this user
+            var existingTokens = await _context.PasswordResetTokens
+                .Where(t => t.UserId == user.Id && !t.Used && t.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
+            foreach (var t in existingTokens)
+            {
+                t.Used = true;
+            }
+
+            // Create new token (expires in 1 hour)
+            var resetToken = new PasswordResetToken
+            {
+                UserId = user.Id,
+                TokenHash = tokenHash,
+                ExpiresAt = DateTime.UtcNow.AddHours(1),
+                Used = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.PasswordResetTokens.Add(resetToken);
+            await _context.SaveChangesAsync();
+
+            // Build reset link
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
+            var resetLink = $"{frontendUrl}/reset-password?token={rawToken}";
+
+            // Send email asynchronously
+            _ = Task.Run(async () =>
+            {
+                var emailBody = _emailService.BuildPasswordResetEmail(user.FullName, resetLink);
+                await _emailService.SendEmailAsync(
+                    user.Email,
+                    user.FullName,
+                    "🔐 Reset Your Password - Local Services Marketplace",
+                    emailBody
+                );
+            });
+
+            return Ok(new { message = "If an account exists with this email, you'll receive a password reset link shortly." });
+        }
+
+        // ============================================
+        // POST: api/auth/reset-password
+        // ============================================
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            // Get all non-expired, unused tokens
+            var validTokens = await _context.PasswordResetTokens
+                .Include(t => t.User)
+                .Where(t => !t.Used && t.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
+
+            // Find the token by checking each hash (BCrypt verify is one-way)
+            PasswordResetToken? matchingToken = null;
+            foreach (var token in validTokens)
+            {
+                if (BCrypt.Net.BCrypt.Verify(dto.Token, token.TokenHash))
+                {
+                    matchingToken = token;
+                    break;
+                }
+            }
+
+            if (matchingToken == null)
+            {
+                return BadRequest(new { message = "Invalid or expired reset token. Please request a new password reset." });
+            }
+
+            // Update user password
+            matchingToken.User!.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            matchingToken.User.UpdatedAt = DateTime.UtcNow;
+
+            // Mark token as used (one-time use)
+            matchingToken.Used = true;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Password reset successfully! You can now log in with your new password." });
+        }
     }
-
-
-
-
-
-
 }

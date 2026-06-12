@@ -14,7 +14,7 @@ namespace LocalServices.Api.Data
         public DbSet<Category> Categories { get; set; }
         public DbSet<Listing> Listings { get; set; }
         public DbSet<Booking> Bookings { get; set; }
-
+        public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

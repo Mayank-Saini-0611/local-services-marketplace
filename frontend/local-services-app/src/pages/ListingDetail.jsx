@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { listingApi } from '../api/listingApi';
+import { bookingApi } from '../api/bookingApi';
+import { tokenStorage } from '../utils/tokenStorage';
 import { 
   ArrowLeft,
   MapPin, 
@@ -17,10 +19,12 @@ import {
   MessageCircle,
   ChevronRight,
   Frown,
-  Loader2
+  Loader2,
+  X,
+  Send,
+  AlertCircle
 } from 'lucide-react';
 
-// Same image mapping as BrowseServices
 const getCategoryImage = (categoryName) => {
   const imageMap = {
     'Plumber': 'https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=1200&q=80',
@@ -38,6 +42,7 @@ const getCategoryImage = (categoryName) => {
 function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const user = tokenStorage.getUser();
   
   const [listing, setListing] = useState(null);
   const [similarListings, setSimilarListings] = useState([]);
@@ -45,6 +50,16 @@ function ListingDetail() {
   const [error, setError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  
+  // Booking modal state
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [bookingForm, setBookingForm] = useState({
+    message: '',
+    preferredDate: '',
+  });
+  const [bookingErrors, setBookingErrors] = useState({});
+  const [isBooking, setIsBooking] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
 
   useEffect(() => {
     fetchListing();
@@ -58,13 +73,11 @@ function ListingDetail() {
       const data = await listingApi.getById(id);
       setListing(data);
       
-      // Fetch similar listings from same category
       try {
         const similar = await listingApi.getAll({ 
           categoryId: data.categoryId, 
           pageSize: 4 
         });
-        // Filter out current listing
         setSimilarListings((similar.data || []).filter(l => l.id !== data.id).slice(0, 3));
       } catch (e) {
         console.error('Similar listings error:', e);
@@ -94,7 +107,70 @@ function ListingDetail() {
     }
   };
 
-  // Loading state
+  const handleOpenBookingModal = () => {
+    // Check if user is logged in
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    // Provider can't book own listing
+    if (user.userId === listing.providerId) {
+      alert("You cannot book your own listing!");
+      return;
+    }
+
+    setBookingForm({ message: '', preferredDate: '' });
+    setBookingErrors({});
+    setBookingSuccess(false);
+    setShowBookingModal(true);
+  };
+
+  const validateBooking = () => {
+    const errors = {};
+    if (!bookingForm.message.trim()) {
+      errors.message = 'Message is required';
+    } else if (bookingForm.message.length < 10) {
+      errors.message = 'Message must be at least 10 characters';
+    }
+    setBookingErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitBooking = async (e) => {
+    e.preventDefault();
+    if (!validateBooking()) return;
+
+    setIsBooking(true);
+    setBookingErrors({});
+
+    try {
+      const payload = {
+        listingId: parseInt(id),
+        message: bookingForm.message.trim(),
+        preferredDate: bookingForm.preferredDate 
+          ? new Date(bookingForm.preferredDate).toISOString() 
+          : null,
+      };
+
+      await bookingApi.create(payload);
+      setBookingSuccess(true);
+      
+      // Auto-close modal after 2 seconds
+      setTimeout(() => {
+        setShowBookingModal(false);
+        navigate('/dashboard/bookings');
+      }, 2500);
+    } catch (err) {
+      console.error('Booking error:', err);
+      setBookingErrors({ 
+        general: err.response?.data?.message || 'Failed to submit booking. Please try again.' 
+      });
+    } finally {
+      setIsBooking(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -106,7 +182,6 @@ function ListingDetail() {
     );
   }
 
-  // Error state
   if (error || !listing) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -125,70 +200,50 @@ function ListingDetail() {
     );
   }
 
+  // Min date for date picker (today)
+  const today = new Date().toISOString().split('T')[0];
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       
-      {/* ===== BREADCRUMB ===== */}
+      {/* BREADCRUMB */}
       <nav className="flex items-center gap-2 text-sm text-slate-500">
         <Link to="/dashboard" className="hover:text-violet-600 transition-colors">Home</Link>
         <ChevronRight className="w-4 h-4" />
         <Link to="/dashboard/browse" className="hover:text-violet-600 transition-colors">Browse</Link>
         <ChevronRight className="w-4 h-4" />
-        <Link 
-          to={`/dashboard/browse?categoryId=${listing.categoryId}`} 
-          className="hover:text-violet-600 transition-colors"
-        >
+        <Link to={`/dashboard/browse?categoryId=${listing.categoryId}`} className="hover:text-violet-600 transition-colors">
           {listing.categoryName}
         </Link>
         <ChevronRight className="w-4 h-4" />
         <span className="text-slate-700 truncate">{listing.title}</span>
       </nav>
 
-      {/* ===== BACK BUTTON ===== */}
-      <button
-        onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-2 text-slate-600 hover:text-violet-600 transition-colors text-sm font-medium"
-      >
+      <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-slate-600 hover:text-violet-600 transition-colors text-sm font-medium">
         <ArrowLeft className="w-4 h-4" />
         Back
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
         
-        {/* ===== LEFT: MAIN CONTENT ===== */}
+        {/* LEFT: MAIN CONTENT */}
         <div className="space-y-6">
           
-          {/* Hero Image */}
           <div className="relative h-64 sm:h-96 rounded-3xl overflow-hidden bg-slate-100">
-            <img
-              src={getCategoryImage(listing.categoryName)}
-              alt={listing.title}
-              className="w-full h-full object-cover"
-            />
-            
-            {/* Top-right actions */}
+            <img src={getCategoryImage(listing.categoryName)} alt={listing.title} className="w-full h-full object-cover" />
             <div className="absolute top-4 right-4 flex gap-2">
-              <button
-                onClick={() => setIsFavorite(!isFavorite)}
-                className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all"
-              >
+              <button onClick={() => setIsFavorite(!isFavorite)} className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all">
                 <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
               </button>
-              <button
-                onClick={handleShare}
-                className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all"
-              >
+              <button onClick={handleShare} className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all">
                 <Share2 className="w-5 h-5 text-slate-700" />
               </button>
             </div>
-
-            {/* Bottom-left category badge */}
             <span className="absolute bottom-4 left-4 px-4 py-2 bg-white/95 backdrop-blur-md text-sm font-semibold text-violet-700 rounded-full shadow-lg">
               {listing.categoryName}
             </span>
           </div>
 
-          {/* Title + Basic Info */}
           <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div className="flex-1">
@@ -212,42 +267,28 @@ function ListingDetail() {
                 </div>
               </div>
             </div>
-
-            {/* Quick Trust Badges */}
             <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-100">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                <Shield className="w-3 h-3" />
-                Insured
+                <Shield className="w-3 h-3" />Insured
               </div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
-                <Award className="w-3 h-3" />
-                Top Rated
+                <Award className="w-3 h-3" />Top Rated
               </div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-                <Clock className="w-3 h-3" />
-                Fast Response
+                <Clock className="w-3 h-3" />Fast Response
               </div>
             </div>
           </div>
 
-          {/* Description */}
           <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
             <h2 className="text-xl font-bold text-slate-900 mb-4">About this service</h2>
             <p className="text-slate-700 leading-relaxed whitespace-pre-line">{listing.description}</p>
           </div>
 
-          {/* What's Included */}
           <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
             <h2 className="text-xl font-bold text-slate-900 mb-4">What's included</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                'Professional service delivery',
-                'Tools & equipment included',
-                'Service warranty',
-                'Free quote estimate',
-                'Punctual & reliable',
-                'Quality guaranteed'
-              ].map((item, idx) => (
+              {['Professional service delivery', 'Tools & equipment included', 'Service warranty', 'Free quote estimate', 'Punctual & reliable', 'Quality guaranteed'].map((item, idx) => (
                 <div key={idx} className="flex items-center gap-2 text-sm text-slate-700">
                   <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                   {item}
@@ -256,7 +297,6 @@ function ListingDetail() {
             </div>
           </div>
 
-          {/* Service Details */}
           <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Service Details</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -278,10 +318,9 @@ function ListingDetail() {
           </div>
         </div>
 
-        {/* ===== RIGHT: BOOKING SIDEBAR ===== */}
+        {/* RIGHT: BOOKING SIDEBAR */}
         <div className="lg:sticky lg:top-24 space-y-6 h-fit">
           
-          {/* Pricing & Booking Card */}
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-lg">
             <div className="mb-4">
               <div className="flex items-baseline gap-2 mb-1">
@@ -291,9 +330,8 @@ function ListingDetail() {
               <p className="text-xs text-slate-500">Final price may vary based on requirements</p>
             </div>
 
-            {/* CTA Buttons */}
             <button 
-              onClick={() => alert('Booking feature coming in Week 6!')}
+              onClick={handleOpenBookingModal}
               className="w-full py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg shadow-violet-200 mb-3 flex items-center justify-center gap-2"
             >
               <Calendar className="w-4 h-4" />
@@ -308,7 +346,6 @@ function ListingDetail() {
               {showContact ? 'Hide Contact' : 'Contact Provider'}
             </button>
 
-            {/* Contact Info (toggles) */}
             {showContact && (
               <div className="mt-4 p-4 bg-violet-50 border border-violet-100 rounded-xl space-y-3">
                 <div className="flex items-center gap-3">
@@ -336,17 +373,14 @@ function ListingDetail() {
               </div>
             )}
 
-            {/* Trust Note */}
             <p className="text-xs text-slate-500 text-center mt-4 flex items-center justify-center gap-1">
               <Shield className="w-3 h-3" />
               Secure & verified provider
             </p>
           </div>
 
-          {/* Provider Card */}
           <div className="bg-white rounded-2xl border border-slate-100 p-6">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Service Provider</h3>
-            
             <div className="flex items-center gap-3 mb-4">
               <div className="w-14 h-14 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
                 {listing.providerName.charAt(0).toUpperCase()}
@@ -361,7 +395,6 @@ function ListingDetail() {
                 </div>
               </div>
             </div>
-
             <div className="space-y-2 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-500">Member since</span>
@@ -380,31 +413,21 @@ function ListingDetail() {
         </div>
       </div>
 
-      {/* ===== SIMILAR LISTINGS ===== */}
+      {/* SIMILAR LISTINGS */}
       {similarListings.length > 0 && (
         <div className="pt-8">
           <h2 className="text-xl lg:text-2xl font-bold text-slate-900 mb-6">Similar Services</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {similarListings.map(item => (
-              <div
-                key={item.id}
-                onClick={() => navigate(`/dashboard/listing/${item.id}`)}
-                className="group bg-white rounded-2xl border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden cursor-pointer"
-              >
+              <div key={item.id} onClick={() => navigate(`/dashboard/listing/${item.id}`)} className="group bg-white rounded-2xl border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden cursor-pointer">
                 <div className="relative h-40 overflow-hidden">
-                  <img
-                    src={getCategoryImage(item.categoryName)}
-                    alt={item.title}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
+                  <img src={getCategoryImage(item.categoryName)} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   <span className="absolute top-3 left-3 px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-semibold text-violet-700 rounded-full">
                     {item.categoryName}
                   </span>
                 </div>
                 <div className="p-4">
-                  <h3 className="font-bold text-slate-900 line-clamp-1 group-hover:text-violet-600 transition-colors mb-1">
-                    {item.title}
-                  </h3>
+                  <h3 className="font-bold text-slate-900 line-clamp-1 group-hover:text-violet-600 transition-colors mb-1">{item.title}</h3>
                   <p className="text-xs text-slate-500 mb-2">by {item.providerName}</p>
                   <div className="flex items-center justify-between pt-2">
                     <span className="text-lg font-bold text-slate-900">₹{item.price}</span>
@@ -420,6 +443,146 @@ function ListingDetail() {
         </div>
       )}
 
+      {/* ============================================ */}
+      {/* BOOKING MODAL */}
+      {/* ============================================ */}
+      {showBookingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-slate-100 p-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Book This Service</h2>
+                <p className="text-sm text-slate-500 mt-0.5">{listing.title}</p>
+              </div>
+              <button onClick={() => setShowBookingModal(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            {bookingSuccess ? (
+              // Success State
+              <div className="p-8 text-center">
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 className="w-12 h-12 text-green-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Booking Submitted! 🎉</h3>
+                <p className="text-slate-600 mb-4">
+                  Your request has been sent to <strong>{listing.providerName}</strong>.
+                </p>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                  <p className="text-sm text-green-700 flex items-center justify-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Confirmation email sent to your inbox
+                  </p>
+                </div>
+                <p className="text-sm text-slate-500">Redirecting to My Bookings...</p>
+                <Loader2 className="w-5 h-5 text-violet-600 animate-spin mx-auto mt-3" />
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitBooking} className="p-6 space-y-5">
+                
+                {/* Provider Info Card */}
+                <div className="flex items-center gap-3 p-4 bg-violet-50 rounded-xl">
+                  <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                    {listing.providerName.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900">{listing.providerName}</p>
+                    <p className="text-xs text-slate-500">Will receive your request via email</p>
+                  </div>
+                </div>
+
+                {bookingErrors.general && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700">{bookingErrors.general}</p>
+                  </div>
+                )}
+
+                {/* Message */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Your Message <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={bookingForm.message}
+                    onChange={(e) => {
+                      setBookingForm({ ...bookingForm, message: e.target.value });
+                      if (bookingErrors.message) setBookingErrors({ ...bookingErrors, message: '' });
+                    }}
+                    rows="5"
+                    placeholder="Hi! I need this service for... (describe your requirements)"
+                    className={`w-full px-4 py-3 bg-white border ${bookingErrors.message ? 'border-red-400' : 'border-slate-200'} rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 resize-none`}
+                  />
+                  {bookingErrors.message && (
+                    <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {bookingErrors.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400 mt-1">{bookingForm.message.length} / 1000 characters</p>
+                </div>
+
+                {/* Preferred Date */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Preferred Date <span className="text-slate-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={bookingForm.preferredDate}
+                    onChange={(e) => setBookingForm({ ...bookingForm, preferredDate: e.target.value })}
+                    min={today}
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                  />
+                </div>
+
+                {/* Service Summary */}
+                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Service</span>
+                    <span className="font-semibold text-slate-900 truncate ml-2">{listing.title}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Starting Price</span>
+                    <span className="font-semibold text-slate-900">₹{listing.price}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Location</span>
+                    <span className="font-semibold text-slate-900">{listing.location}</span>
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={isBooking}
+                  className="w-full py-3.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg shadow-violet-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isBooking ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Submit Booking Request
+                    </>
+                  )}
+                </button>
+
+                <p className="text-xs text-center text-slate-500">
+                  By booking, you agree to share your contact info with the provider.
+                </p>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
