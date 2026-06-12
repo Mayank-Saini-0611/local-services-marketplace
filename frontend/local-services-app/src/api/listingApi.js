@@ -1,0 +1,39 @@
+import axiosClient from './axiosClient';
+
+export const listingApi = {
+  // Get all listings (with optional filters + pagination)
+  getAll: async (params = {}) => {
+    const response = await axiosClient.get('/listings', { params });
+    return response.data;
+  },
+
+  // Get single listing by ID
+  getById: async (id) => {
+    const response = await axiosClient.get(`/listings/${id}`);
+    return response.data;
+  },
+
+  // Get current provider's listings (protected)
+  getMyListings: async () => {
+    const response = await axiosClient.get('/listings/my-listings');
+    return response.data;
+  },
+
+  // Create new listing (protected, provider only)
+  create: async (listingData) => {
+    const response = await axiosClient.post('/listings', listingData);
+    return response.data;
+  },
+
+  // Update listing (protected, owner only)
+  update: async (id, listingData) => {
+    const response = await axiosClient.put(`/listings/${id}`, listingData);
+    return response.data;
+  },
+
+  // Soft-delete listing (protected, owner only)
+  delete: async (id) => {
+    const response = await axiosClient.delete(`/listings/${id}`);
+    return response.data;
+  },
+};

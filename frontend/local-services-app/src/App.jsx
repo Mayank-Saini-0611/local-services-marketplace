@@ -2,18 +2,71 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Register from './pages/Register.jsx';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
-
+import DashboardLayout from './components/DashboardLayout.jsx';
+import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import BrowseServices from './pages/BrowseServices.jsx';
+import ListingDetail from './pages/ListingDetail.jsx';
+import MyListings from './pages/MyListings.jsx';
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+
+        {/* Dashboard Routes (with shared layout) */}
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          {/* Default dashboard home */}
+          <Route index element={<Dashboard />} />
+          
+          {/* Browse Services (REAL page now) */}
+          <Route path="browse" element={<BrowseServices />} />
+          
+          {/* Listing detail */}
+          {/* Listing detail */}
+<Route path="listing/:id" element={<ListingDetail />} />
+          
+          {/* My Listings (Providers) */}
+        {/* My Listings (Providers) */}
+<Route path="my-listings" element={<MyListings />} />
+          
+          {/* Placeholders */}
+          <Route path="bookings" element={
+            <PlaceholderPage 
+              title="My Bookings" 
+              description="View and manage your service bookings."
+              week="Week 6"
+            />
+          } />
+          <Route path="favorites" element={
+            <PlaceholderPage 
+              title="Favorites" 
+              description="Your saved service providers."
+              week="Future updates"
+            />
+          } />
+          <Route path="messages" element={
+            <PlaceholderPage 
+              title="Messages" 
+              description="Chat with service providers."
+              week="Future updates"
+            />
+          } />
+          <Route path="settings" element={
+            <PlaceholderPage 
+              title="Settings" 
+              description="Manage your account settings."
+              week="Future updates"
+            />
+          } />
+        </Route>
+
+        {/* 404 fallback */}
         <Route path="*" element={
-          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-950 to-indigo-950 text-white">
-            <h1 className="text-4xl">404 — Page Not Found</h1>
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-violet-100 text-slate-900">
+            <h1 className="text-4xl font-bold">404 — Page Not Found</h1>
           </div>
         } />
       </Routes>
