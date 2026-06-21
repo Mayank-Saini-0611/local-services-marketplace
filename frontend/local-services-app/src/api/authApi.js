@@ -42,4 +42,28 @@ export const authApi = {
     });
     return response.data;
   },
+
+
+
+
+    // Update profile
+  updateProfile: async (profileData) => {
+    const response = await axiosClient.put('/auth/profile', profileData);
+    return response.data;
+  },
+
+  // Change password
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await axiosClient.put('/auth/change-password', {
+      currentPassword,
+      newPassword
+    });
+    return response.data;
+  },
+
+  // Delete account
+  deleteAccount: async () => {
+    const response = await axiosClient.delete('/auth/account');
+    return response.data;
+  },
 };

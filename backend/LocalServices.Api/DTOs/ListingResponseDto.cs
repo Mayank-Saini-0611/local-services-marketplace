@@ -20,5 +20,12 @@
         // Category info (embedded)
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
+
+
+
+        public List<string> ImageUrls { get; set; } = new List<string>();
+
+        public double AverageRating { get; set; }
+        public int ReviewCount { get; set; }
     }
 }

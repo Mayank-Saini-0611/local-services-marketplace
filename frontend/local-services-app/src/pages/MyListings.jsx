@@ -21,7 +21,10 @@ import {
   FileText,
   Save,
   PauseCircle,
-  PlayCircle
+  PlayCircle,
+  Upload,
+  Image as ImageIcon,
+  XCircle as XCircleIcon
 } from 'lucide-react';
 
 function MyListings() {
@@ -41,7 +44,9 @@ function MyListings() {
     price: '',
     location: '',
     isActive: true,
+    imageUrls: [],
   });
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -89,12 +94,13 @@ function MyListings() {
       price: '',
       location: '',
       isActive: true,
+      imageUrls: [],
     });
     setFormErrors({});
     setShowModal(true);
   };
 
-  const openEditModal = (listing) => {
+ const openEditModal = (listing) => {
     setEditingListing(listing);
     setFormData({
       categoryId: String(listing.categoryId),
@@ -103,11 +109,11 @@ function MyListings() {
       price: String(listing.price),
       location: listing.location,
       isActive: listing.isActive,
+      imageUrls: listing.imageUrls || [],
     });
     setFormErrors({});
     setShowModal(true);
   };
-
   const closeModal = () => {
     setShowModal(false);
     setEditingListing(null);
@@ -143,6 +149,7 @@ function MyListings() {
         price: parseFloat(formData.price),
         location: formData.location.trim(),
         isActive: formData.isActive,
+        imageUrls: formData.imageUrls,
       };
 
       if (editingListing) {
@@ -162,6 +169,41 @@ function MyListings() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    
+    if (formData.imageUrls.length + files.length > 5) {
+      showToast('Maximum 5 images allowed per listing', 'error');
+      return;
+    }
+
+    setIsUploadingImages(true);
+    try {
+      const uploadPromises = files.map(file => listingApi.uploadImage(file));
+      const results = await Promise.all(uploadPromises);
+      const newUrls = results.map(r => r.url);
+      
+      setFormData(prev => ({
+        ...prev,
+        imageUrls: [...prev.imageUrls, ...newUrls]
+      }));
+      showToast(`${newUrls.length} image(s) uploaded successfully`);
+    } catch (err) {
+      console.error('Image upload error:', err);
+      showToast(err.response?.data?.message || 'Failed to upload images', 'error');
+    } finally {
+      setIsUploadingImages(false);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  const handleRemoveImage = (urlToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter(url => url !== urlToRemove)
+    }));
   };
 
   const handleToggleActive = async (listing) => {
@@ -473,6 +515,80 @@ function MyListings() {
                     <AlertCircle className="w-3 h-3" />
                     {formErrors.description}
                   </p>
+                )}
+              </div>
+
+
+                            {/* IMAGES UPLOAD */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Service Images <span className="text-slate-400">(Up to 5 images, max 5MB each)</span>
+                </label>
+                
+                {/* Image Preview Grid */}
+                {formData.imageUrls.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                    {formData.imageUrls.map((url, idx) => (
+                      <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border-2 border-slate-200">
+                        <img
+                          src={url}
+                          alt={`Upload ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(url)}
+                            className="w-9 h-9 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {idx === 0 && (
+                          <span className="absolute top-2 left-2 px-2 py-0.5 bg-violet-600 text-white text-xs font-semibold rounded-full">
+                            Cover
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload Button */}
+                {formData.imageUrls.length < 5 && (
+                  <label className={`flex flex-col items-center justify-center w-full py-6 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+                    isUploadingImages 
+                      ? 'border-violet-300 bg-violet-50' 
+                      : 'border-slate-300 hover:border-violet-400 hover:bg-violet-50'
+                  }`}>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      multiple
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImages}
+                      className="hidden"
+                    />
+                    {isUploadingImages ? (
+                      <>
+                        <Loader2 className="w-8 h-8 text-violet-600 animate-spin mb-2" />
+                        <p className="text-sm font-medium text-violet-600">Uploading...</p>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                        <p className="text-sm font-medium text-slate-700">Click to upload images</p>
+                        <p className="text-xs text-slate-500 mt-1">JPG, PNG, WEBP up to 5MB each</p>
+                        <p className="text-xs text-slate-400 mt-1">{formData.imageUrls.length}/5 images added</p>
+                      </>
+                    )}
+                  </label>
+                )}
+                
+                {formData.imageUrls.length >= 5 && (
+                  <div className="text-center py-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <p className="text-sm text-amber-700">Maximum 5 images reached. Remove one to add more.</p>
+                  </div>
                 )}
               </div>
 

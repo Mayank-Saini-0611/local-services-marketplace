@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { listingApi } from '../api/listingApi';
 import { bookingApi } from '../api/bookingApi';
 import { tokenStorage } from '../utils/tokenStorage';
+import { reviewApi } from '../api/reviewApi';
 import { 
   ArrowLeft,
   MapPin, 
@@ -24,6 +25,24 @@ import {
   Send,
   AlertCircle
 } from 'lucide-react';
+
+const getListingImages = (listing) => {
+  if (listing.imageUrls && listing.imageUrls.length > 0) {
+    return listing.imageUrls;
+  }
+  
+  const imageMap = {
+    'Plumber': 'https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=1200&q=80',
+    'Electrician': 'https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=1200&q=80',
+    'Tutor': 'https://images.unsplash.com/photo-1581726707445-75cbe4efc586?w=1200&q=80',
+    'Cleaner': 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80',
+    'Carpenter': 'https://images.unsplash.com/photo-1601058268499-e52658b8bb88?w=1200&q=80',
+    'Painter': 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=1200&q=80',
+    'AC Repair': 'https://images.unsplash.com/photo-1631545806609-073f5c39d2b9?w=1200&q=80',
+    'Gardener': 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=1200&q=80',
+  };
+  return [imageMap[listing.categoryName] || 'https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1200&q=80'];
+};
 
 const getCategoryImage = (categoryName) => {
   const imageMap = {
@@ -50,6 +69,10 @@ function ListingDetail() {
   const [error, setError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  const [currentImageIdx, setCurrentImageIdx] = useState(0);
+
+  const [reviews, setReviews] = useState([]);
+const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews: 0, fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStar: 0 });
   
   // Booking modal state
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -82,6 +105,18 @@ function ListingDetail() {
       } catch (e) {
         console.error('Similar listings error:', e);
       }
+
+      // Fetch reviews
+      try {
+        const [reviewsData, statsData] = await Promise.all([
+          reviewApi.getListingReviews(data.id),
+          reviewApi.getListingStats(data.id)
+        ]);
+        setReviews(reviewsData);
+        setReviewStats(statsData);
+      } catch (e) {
+        console.error('Reviews fetch error:', e);
+      }
     } catch (err) {
       console.error('Failed to fetch listing:', err);
       setError(err.response?.status === 404 ? 'Listing not found' : 'Failed to load listing');
@@ -89,7 +124,6 @@ function ListingDetail() {
       setLoading(false);
     }
   };
-
   const handleShare = async () => {
     if (navigator.share) {
       try {
@@ -228,31 +262,83 @@ function ListingDetail() {
         
         {/* LEFT: MAIN CONTENT */}
         <div className="space-y-6">
-          
-          <div className="relative h-64 sm:h-96 rounded-3xl overflow-hidden bg-slate-100">
-            <img src={getCategoryImage(listing.categoryName)} alt={listing.title} className="w-full h-full object-cover" />
-            <div className="absolute top-4 right-4 flex gap-2">
-              <button onClick={() => setIsFavorite(!isFavorite)} className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all">
-                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
-              </button>
-              <button onClick={handleShare} className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all">
-                <Share2 className="w-5 h-5 text-slate-700" />
-              </button>
+                    {/* Hero Image Gallery */}
+          <div className="space-y-3">
+            <div className="relative h-64 sm:h-96 rounded-3xl overflow-hidden bg-slate-100">
+              <img
+                src={getListingImages(listing)[currentImageIdx]}
+                alt={listing.title}
+                className="w-full h-full object-cover"
+              />
+              
+              {/* Top-right actions */}
+              <div className="absolute top-4 right-4 flex gap-2">
+                <button
+                  onClick={() => setIsFavorite(!isFavorite)}
+                  className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all"
+                >
+                  <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
+                </button>
+                <button
+                  onClick={handleShare}
+                  className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all"
+                >
+                  <Share2 className="w-5 h-5 text-slate-700" />
+                </button>
+              </div>
+
+              {/* Bottom-left category badge */}
+              <span className="absolute bottom-4 left-4 px-4 py-2 bg-white/95 backdrop-blur-md text-sm font-semibold text-violet-700 rounded-full shadow-lg">
+                {listing.categoryName}
+              </span>
+              
+              {/* Image counter (if multiple) */}
+              {getListingImages(listing).length > 1 && (
+                <span className="absolute bottom-4 right-4 px-3 py-1 bg-black/60 backdrop-blur-md text-white text-xs font-semibold rounded-full">
+                  {currentImageIdx + 1} / {getListingImages(listing).length}
+                </span>
+              )}
             </div>
-            <span className="absolute bottom-4 left-4 px-4 py-2 bg-white/95 backdrop-blur-md text-sm font-semibold text-violet-700 rounded-full shadow-lg">
-              {listing.categoryName}
-            </span>
+            
+            {/* Thumbnail Strip */}
+            {getListingImages(listing).length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {getListingImages(listing).map((url, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentImageIdx(idx)}
+                    className={`flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${
+                      currentImageIdx === idx 
+                        ? 'border-violet-500 scale-105 shadow-lg' 
+                        : 'border-transparent opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={url} alt={`Thumb ${idx + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+          
+          
+            
+            
 
           <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div className="flex-1">
                 <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-3">{listing.title}</h1>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                  <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1">
                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold text-slate-700">4.8</span>
-                    <span className="text-slate-400">(234 reviews)</span>
+                    <span className="font-semibold text-slate-700">
+                      {reviewStats.averageRating > 0 ? reviewStats.averageRating.toFixed(1) : 'No ratings'}
+                    </span>
+                    <span className="text-slate-400">
+                      {reviewStats.totalReviews > 0 
+                        ? `(${reviewStats.totalReviews} ${reviewStats.totalReviews === 1 ? 'review' : 'reviews'})` 
+                        : '(Be the first!)'}
+                    </span>
                   </div>
                   <span className="text-slate-300">•</span>
                   <div className="flex items-center gap-1">

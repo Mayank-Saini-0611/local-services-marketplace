@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingApi } from '../api/bookingApi';
+import { reviewApi } from '../api/reviewApi';
 import { tokenStorage } from '../utils/tokenStorage';
 import { 
   Calendar,
@@ -19,6 +20,7 @@ import {
   X,
   Filter,
   Inbox,
+  Star,
   Send as SendIcon
 } from 'lucide-react';
 
@@ -33,6 +35,10 @@ function Bookings() {
   const [toast, setToast] = useState(null);
   const [cancelConfirm, setCancelConfirm] = useState(null);
   const [statusUpdate, setStatusUpdate] = useState(null);
+  const [reviewModal, setReviewModal] = useState(null);
+const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
+const [reviewErrors, setReviewErrors] = useState({});
+const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     fetchBookings();
@@ -80,6 +86,34 @@ function Bookings() {
     } catch (err) {
       console.error('Status update error:', err);
       showToast('Failed to update status', 'error');
+    }
+  };
+
+    const handleSubmitReview = async () => {
+    if (reviewForm.rating === 0) {
+      setReviewErrors({ rating: 'Please select a rating' });
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    setReviewErrors({});
+    try {
+      await reviewApi.create({
+        bookingId: reviewModal.id,
+        rating: reviewForm.rating,
+        comment: reviewForm.comment.trim() || null
+      });
+      showToast('Review submitted successfully!');
+      setReviewModal(null);
+      setReviewForm({ rating: 0, comment: '' });
+      fetchBookings();
+    } catch (err) {
+      console.error('Review error:', err);
+      setReviewErrors({ 
+        general: err.response?.data?.message || 'Failed to submit review' 
+      });
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -319,13 +353,18 @@ function Bookings() {
                     </button>
 
                     {/* Customer Actions */}
-                    {isMyBookings && booking.status === 'pending' && (
+                                        {/* Write Review Button (Customer for completed bookings) */}
+                    {isMyBookings && booking.status === 'completed' && (
                       <button
-                        onClick={() => setCancelConfirm(booking)}
-                        className="inline-flex items-center justify-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-medium rounded-lg transition-colors"
+                        onClick={() => { 
+                          setReviewModal(booking); 
+                          setReviewForm({ rating: 0, comment: '' });
+                          setReviewErrors({});
+                        }}
+                        className="inline-flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-white text-sm font-medium rounded-lg transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
-                        Cancel
+                        <Star className="w-4 h-4" />
+                        Write Review
                       </button>
                     )}
 
@@ -396,8 +435,110 @@ function Bookings() {
             </div>
           </div>
         </div>
+        
+        
+      )}
+            {/* WRITE REVIEW MODAL */}
+      {reviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
+            
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-900 mb-1">Write a Review</h3>
+              <p className="text-sm text-slate-500">{reviewModal.listingTitle}</p>
+            </div>
+
+            <div className="p-6 space-y-5">
+              
+              {reviewErrors.general && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{reviewErrors.general}</p>
+                </div>
+              )}
+
+              {/* Star Rating */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-3">
+                  How would you rate this service? <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center justify-center gap-2 py-4">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => { 
+                        setReviewForm({ ...reviewForm, rating: star });
+                        if (reviewErrors.rating) setReviewErrors({ ...reviewErrors, rating: '' });
+                      }}
+                      className="transition-transform hover:scale-110"
+                    >
+                      <Star 
+                        className={`w-12 h-12 transition-colors ${
+                          star <= reviewForm.rating 
+                            ? 'fill-yellow-400 text-yellow-400' 
+                            : 'text-slate-300 hover:text-yellow-300'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+                <p className="text-center text-sm font-medium text-slate-600 mt-2">
+                  {reviewForm.rating === 0 && 'Tap a star to rate'}
+                  {reviewForm.rating === 1 && '😞 Poor'}
+                  {reviewForm.rating === 2 && '😐 Fair'}
+                  {reviewForm.rating === 3 && '🙂 Good'}
+                  {reviewForm.rating === 4 && '😊 Very Good'}
+                  {reviewForm.rating === 5 && '🤩 Excellent!'}
+                </p>
+                {reviewErrors.rating && (
+                  <p className="text-xs text-red-600 mt-1 text-center">{reviewErrors.rating}</p>
+                )}
+              </div>
+
+              {/* Comment */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Share your experience <span className="text-slate-400">(Optional)</span>
+                </label>
+                <textarea
+                  value={reviewForm.comment}
+                  onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                  rows="4"
+                  maxLength="1000"
+                  placeholder="What did you like or dislike about this service?"
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 resize-none"
+                />
+                <p className="text-xs text-slate-400 text-right mt-1">{reviewForm.comment.length}/1000</p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => { setReviewModal(null); setReviewForm({ rating: 0, comment: '' }); }}
+                  className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitReview}
+                  disabled={isSubmittingReview || reviewForm.rating === 0}
+                  className="flex-1 py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isSubmittingReview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
+                  Submit Review
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
+
+
+    
+    
+    
+
   );
 }
 

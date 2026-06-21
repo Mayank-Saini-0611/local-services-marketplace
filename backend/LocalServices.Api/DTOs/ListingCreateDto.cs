@@ -23,5 +23,8 @@ namespace LocalServices.Api.DTOs
         [Required(ErrorMessage = "Location is required")]
         [MaxLength(150)]
         public string Location { get; set; } = string.Empty;
+
+
+        public List<string>? ImageUrls { get; set; }
     }
 }

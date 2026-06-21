@@ -1,21 +1,23 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Register from './pages/Register.jsx';
 import Login from './pages/Login.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import DashboardLayout from './components/DashboardLayout.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import BrowseServices from './pages/BrowseServices.jsx';
+import ListingDetail from './pages/ListingDetail.jsx';
+import MyListings from './pages/MyListings.jsx';
+import Bookings from './pages/Bookings.jsx';
+import Profile from './pages/Profile.jsx';
+import Settings from './pages/Settings.jsx';
+import Messages from './pages/Messages.jsx';
 import AdminLayout from './components/AdminLayout.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import AdminListings from './pages/AdminListings.jsx';
 import AdminBookings from './pages/AdminBookings.jsx';
-import BrowseServices from './pages/BrowseServices.jsx';
-import ListingDetail from './pages/ListingDetail.jsx';
-import MyListings from './pages/MyListings.jsx';
-import Bookings from './pages/Bookings.jsx';
-import ForgotPassword from './pages/ForgotPassword.jsx';
-import ResetPassword from './pages/ResetPassword.jsx';
-
 
 function App() {
   return (
@@ -26,25 +28,18 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-<Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Dashboard Routes (with shared layout) */}
         <Route path="/dashboard" element={<DashboardLayout />}>
-          {/* Default dashboard home */}
           <Route index element={<Dashboard />} />
-          
-          {/* Browse Services (REAL page now) */}
           <Route path="browse" element={<BrowseServices />} />
-          
-          {/* Listing detail */}
-          {/* Listing detail */}
-<Route path="listing/:id" element={<ListingDetail />} />
-          
-          {/* My Listings (Providers) */}
-        {/* My Listings (Providers) */}
-<Route path="my-listings" element={<MyListings />} />
-          
+          <Route path="listing/:id" element={<ListingDetail />} />
+          <Route path="my-listings" element={<MyListings />} />
           <Route path="bookings" element={<Bookings />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="messages" element={<Messages />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="favorites" element={
             <PlaceholderPage 
               title="Favorites" 
@@ -52,32 +47,15 @@ function App() {
               week="Future updates"
             />
           } />
-          <Route path="messages" element={
-            <PlaceholderPage 
-              title="Messages" 
-              description="Chat with service providers."
-              week="Future updates"
-            />
-          } />
-          <Route path="settings" element={
-            <PlaceholderPage 
-              title="Settings" 
-              description="Manage your account settings."
-              week="Future updates"
-            />
-          } />
         </Route>
 
-                {/* ============== ADMIN ROUTES ============== */}
+        {/* Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="listings" element={<AdminListings />} />
           <Route path="bookings" element={<AdminBookings />} />
-          
         </Route>
-
-        
 
         {/* 404 fallback */}
         <Route path="*" element={

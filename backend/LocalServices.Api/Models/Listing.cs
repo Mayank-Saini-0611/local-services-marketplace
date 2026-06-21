@@ -36,6 +36,11 @@ namespace LocalServices.Api.Models
         [Column("location")]
         public string Location { get; set; } = string.Empty;
 
+
+
+        [Column("image_urls")]
+        public string? ImageUrls { get; set; }
+
         [Column("is_active")]
         public bool IsActive { get; set; } = true;
 

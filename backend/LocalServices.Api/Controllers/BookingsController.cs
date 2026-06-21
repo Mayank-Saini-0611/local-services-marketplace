@@ -16,11 +16,13 @@ namespace LocalServices.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly EmailService _emailService;
+        private readonly NotificationService _notificationService;
 
-        public BookingsController(AppDbContext context, EmailService emailService)
+        public BookingsController(AppDbContext context, EmailService emailService, NotificationService notificationService)
         {
             _context = context;
             _emailService = emailService;
+            _notificationService = notificationService;
         }
 
         // ============================================
@@ -112,6 +114,17 @@ namespace LocalServices.Api.Controllers
                     customerEmail
                 );
             });
+
+            // Send real-time notification to provider
+            await _notificationService.SendNotificationAsync(
+                userId: listing.Provider!.Id,
+                type: "booking_received",
+                title: "New Booking Request! 🎉",
+                message: $"{customer.FullName} booked '{listing.Title}'",
+                link: "/dashboard/bookings"
+            );
+
+
 
             // Return immediately (don't wait for emails)
             return Ok(new
@@ -308,6 +321,24 @@ namespace LocalServices.Api.Controllers
                     emailBody
                 );
             });
+
+
+            // Send real-time notification to customer
+            var statusEmoji = dto.Status switch
+            {
+                "accepted" => "✅",
+                "rejected" => "❌",
+                "completed" => "🎉",
+                _ => "📩"
+            };
+
+            await _notificationService.SendNotificationAsync(
+                userId: booking.CustomerId,
+                type: $"booking_{dto.Status}",
+                title: $"Booking {dto.Status} {statusEmoji}",
+                message: $"Your booking for '{booking.Listing.Title}' has been {dto.Status}",
+                link: "/dashboard/bookings"
+            );
 
             return Ok(new
             {

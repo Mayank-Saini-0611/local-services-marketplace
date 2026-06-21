@@ -14,11 +14,24 @@ html, body, #root {
   width: 100%;
 }
 
-body {
-  overflow-x: hidden;
+/* Smooth theme transition */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Custom scrollbar */
+body {
+  overflow-x: hidden;
+  background-color: white;
+  color: #0f172a;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+/* Custom scrollbar - light mode */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -34,4 +47,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #6d28d9;
+}
+
+/* Dark mode scrollbar */
+html.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #7c3aed;
 }

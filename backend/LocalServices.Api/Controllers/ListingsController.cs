@@ -78,6 +78,9 @@ namespace LocalServices.Api.Controllers
                     Description = l.Description,
                     Price = l.Price,
                     Location = l.Location,
+                    ImageUrls = !string.IsNullOrEmpty(l.ImageUrls)
+    ? l.ImageUrls.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+    : new List<string>(),
                     IsActive = l.IsActive,
                     CreatedAt = l.CreatedAt,
                     UpdatedAt = l.UpdatedAt,
@@ -89,6 +92,23 @@ namespace LocalServices.Api.Controllers
                     CategoryName = l.Category!.Name
                 })
                 .ToListAsync();
+
+
+
+            // Add ratings data
+            var listingIds = listings.Select(l => l.Id).ToList();
+            var ratingsData = await _context.Reviews
+                .Where(r => listingIds.Contains(r.ListingId))
+                .GroupBy(r => r.ListingId)
+                .Select(g => new { ListingId = g.Key, Avg = g.Average(r => r.Rating), Count = g.Count() })
+                .ToListAsync();
+
+            foreach (var listing in listings)
+            {
+                var rating = ratingsData.FirstOrDefault(r => r.ListingId == listing.Id);
+                listing.AverageRating = rating != null ? Math.Round(rating.Avg, 1) : 0;
+                listing.ReviewCount = rating?.Count ?? 0;
+            }
 
             // Return with pagination metadata
             return Ok(new
@@ -125,6 +145,9 @@ namespace LocalServices.Api.Controllers
                     Price = l.Price,
                     Location = l.Location,
                     IsActive = l.IsActive,
+                    ImageUrls = !string.IsNullOrEmpty(l.ImageUrls)
+    ? l.ImageUrls.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+    : new List<string>(),
                     CreatedAt = l.CreatedAt,
                     UpdatedAt = l.UpdatedAt,
                     ProviderId = l.ProviderId,
@@ -138,6 +161,14 @@ namespace LocalServices.Api.Controllers
 
             if (listing == null)
                 return NotFound(new { message = $"Listing with ID {id} not found." });
+
+            if (listing != null)
+            {
+                var reviews = await _context.Reviews.Where(r => r.ListingId == listing.Id).ToListAsync();
+                listing.AverageRating = reviews.Any() ? Math.Round(reviews.Average(r => r.Rating), 1) : 0;
+                listing.ReviewCount = reviews.Count;
+            }
+
 
             return Ok(listing);
         }
@@ -167,6 +198,9 @@ namespace LocalServices.Api.Controllers
                     Price = l.Price,
                     Location = l.Location,
                     IsActive = l.IsActive,
+                    ImageUrls = !string.IsNullOrEmpty(l.ImageUrls)
+    ? l.ImageUrls.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+    : new List<string>(),
                     CreatedAt = l.CreatedAt,
                     UpdatedAt = l.UpdatedAt,
                     ProviderId = l.ProviderId,
@@ -177,6 +211,20 @@ namespace LocalServices.Api.Controllers
                     CategoryName = l.Category!.Name
                 })
                 .ToListAsync();
+
+            var listingIds = listings.Select(l => l.Id).ToList();
+            var ratingsData = await _context.Reviews
+                .Where(r => listingIds.Contains(r.ListingId))
+                .GroupBy(r => r.ListingId)
+                .Select(g => new { ListingId = g.Key, Avg = g.Average(r => r.Rating), Count = g.Count() })
+                .ToListAsync();
+
+            foreach (var listing in listings)
+            {
+                var rating = ratingsData.FirstOrDefault(r => r.ListingId == listing.Id);
+                listing.AverageRating = rating != null ? Math.Round(rating.Avg, 1) : 0;
+                listing.ReviewCount = rating?.Count ?? 0;
+            }
 
             return Ok(listings);
         }
@@ -200,7 +248,6 @@ namespace LocalServices.Api.Controllers
             if (userRole != "provider")
                 return Forbid();
 
-            // Verify category exists
             var categoryExists = await _context.Categories.AnyAsync(c => c.Id == dto.CategoryId);
             if (!categoryExists)
                 return BadRequest(new { message = $"Category with ID {dto.CategoryId} does not exist." });
@@ -213,6 +260,9 @@ namespace LocalServices.Api.Controllers
                 Description = dto.Description,
                 Price = dto.Price,
                 Location = dto.Location,
+                ImageUrls = (dto.ImageUrls != null && dto.ImageUrls.Any())
+                    ? string.Join(",", dto.ImageUrls)
+                    : null,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -221,7 +271,6 @@ namespace LocalServices.Api.Controllers
             _context.Listings.Add(newListing);
             await _context.SaveChangesAsync();
 
-            // Reload with relations to return complete response
             var createdListing = await _context.Listings
                 .Include(l => l.Provider)
                 .Include(l => l.Category)
@@ -233,6 +282,9 @@ namespace LocalServices.Api.Controllers
                     Description = l.Description,
                     Price = l.Price,
                     Location = l.Location,
+                    ImageUrls = !string.IsNullOrEmpty(l.ImageUrls)
+                        ? l.ImageUrls.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                        : new List<string>(),
                     IsActive = l.IsActive,
                     CreatedAt = l.CreatedAt,
                     UpdatedAt = l.UpdatedAt,
@@ -244,6 +296,8 @@ namespace LocalServices.Api.Controllers
                     CategoryName = l.Category!.Name
                 })
                 .FirstAsync();
+            createdListing.AverageRating = 0;
+            createdListing.ReviewCount = 0;
 
             return CreatedAtAction(nameof(GetListingById), new { id = newListing.Id }, createdListing);
         }
@@ -282,6 +336,9 @@ namespace LocalServices.Api.Controllers
             listing.Description = dto.Description;
             listing.Price = dto.Price;
             listing.Location = dto.Location;
+            listing.ImageUrls = (dto.ImageUrls != null && dto.ImageUrls.Any())
+    ? string.Join(",", dto.ImageUrls)
+    : null;
             listing.IsActive = dto.IsActive;
             listing.UpdatedAt = DateTime.UtcNow;
 

@@ -36,4 +36,32 @@ export const listingApi = {
     const response = await axiosClient.delete(`/listings/${id}`);
     return response.data;
   },
+
+
+
+    // Upload single image to Cloudinary
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await axiosClient.post('/upload/image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // Upload multiple images
+  uploadMultiple: async (files) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    
+    const response = await axiosClient.post('/upload/multiple', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };

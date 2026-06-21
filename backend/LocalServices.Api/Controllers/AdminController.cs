@@ -127,6 +127,9 @@ namespace LocalServices.Api.Controllers
                     Description = l.Description,
                     Price = l.Price,
                     Location = l.Location,
+                    ImageUrls = !string.IsNullOrEmpty(l.ImageUrls)
+    ? l.ImageUrls.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+    : new List<string>(),
                     IsActive = l.IsActive,
                     CreatedAt = l.CreatedAt,
                     UpdatedAt = l.UpdatedAt,

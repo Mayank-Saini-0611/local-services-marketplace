@@ -1,5 +1,6 @@
 using LocalServices.Api.Data;
 using LocalServices.Api.Services;
+using LocalServices.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -61,6 +62,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<EmailService>();
 
+builder.Services.AddScoped<CloudinaryService>();
+
+
+
+builder.Services.AddScoped<NotificationService>();
+
+// Add SignalR
+builder.Services.AddSignalR();
+
 // Disable default claim mapping (so JWT claim names stay as-is)
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
@@ -84,6 +94,21 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
         ClockSkew = TimeSpan.Zero
+    };
+
+    // Support JWT in query string for SignalR (since WebSocket headers can't be set easily)
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/notificationHub"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -113,5 +138,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
+app.MapHub<LocalServices.Api.Hubs.NotificationHub>("/notificationHub");
 app.Run();
