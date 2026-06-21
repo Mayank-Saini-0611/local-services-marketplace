@@ -99,9 +99,13 @@ function Register() {
 
       setSuccessMessage('✓ Account created successfully! Redirecting...');
 
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1500);
+setTimeout(() => {
+  if (response.role === 'admin') {
+    navigate('/admin');
+  } else {
+    navigate('/dashboard');
+  }
+}, 1500);
 
     } catch (error) {
       console.error('Registration error:', error);

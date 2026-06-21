@@ -87,7 +87,12 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+// Role-based authorization
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
+    options.AddPolicy("ProviderOnly", policy => policy.RequireRole("provider"));
+});
 
 var app = builder.Build();
 

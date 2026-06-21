@@ -25,13 +25,14 @@ namespace LocalServices.Api.Services
 
             // Claims = information embedded in the token (about the user)
             var claims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim("fullName", user.FullName),
-                new Claim("role", user.Role),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
+{
+    new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+    new Claim(JwtRegisteredClaimNames.Email, user.Email),
+    new Claim("fullName", user.FullName),
+    new Claim("role", user.Role),
+    new Claim(ClaimTypes.Role, user.Role),  // ← Standard role claim for [Authorize(Roles=)]
+    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+};
 
             // Create signing credentials using the secret key
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));

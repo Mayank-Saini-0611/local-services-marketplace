@@ -16,7 +16,8 @@ import {
   Sparkles,
   Menu,
   X,
-  Briefcase
+  Briefcase,
+  Shield
 } from 'lucide-react';
 
 function DashboardLayout() {
@@ -196,23 +197,37 @@ function DashboardLayout() {
                       <p className="text-xs text-violet-100 truncate">{user.email}</p>
                     </div>
                     <div className="p-2">
-                      <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-left">
-                        <User className="w-4 h-4 text-slate-500" />
-                        <span className="text-sm text-slate-700">My Profile</span>
-                      </button>
-                      <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-left">
-                        <Settings className="w-4 h-4 text-slate-500" />
-                        <span className="text-sm text-slate-700">Settings</span>
-                      </button>
-                      <hr className="my-2 border-slate-100" />
-                      <button 
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 transition-colors text-left"
-                      >
-                        <LogOut className="w-4 h-4 text-red-500" />
-                        <span className="text-sm text-red-600 font-medium">Sign Out</span>
-                      </button>
-                    </div>
+  {/* Admin Panel Link - ONLY visible to admins */}
+  {user.role === 'admin' && (
+    <>
+      <button 
+        onClick={() => navigate('/admin')}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 transition-colors text-left border border-orange-200"
+      >
+        <Shield className="w-4 h-4 text-orange-600" />
+        <span className="text-sm text-orange-700 font-semibold">Admin Panel</span>
+      </button>
+      <hr className="my-2 border-slate-100" />
+    </>
+  )}
+  
+  <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-left">
+    <User className="w-4 h-4 text-slate-500" />
+    <span className="text-sm text-slate-700">My Profile</span>
+  </button>
+  <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-left">
+    <Settings className="w-4 h-4 text-slate-500" />
+    <span className="text-sm text-slate-700">Settings</span>
+  </button>
+  <hr className="my-2 border-slate-100" />
+  <button 
+    onClick={handleLogout}
+    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 transition-colors text-left"
+  >
+    <LogOut className="w-4 h-4 text-red-500" />
+    <span className="text-sm text-red-600 font-medium">Sign Out</span>
+  </button>
+</div>
                   </div>
                 )}
               </div>

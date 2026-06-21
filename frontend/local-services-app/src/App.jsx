@@ -4,12 +4,19 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import DashboardLayout from './components/DashboardLayout.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import AdminLayout from './components/AdminLayout.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
+import AdminUsers from './pages/AdminUsers.jsx';
+import AdminListings from './pages/AdminListings.jsx';
+import AdminBookings from './pages/AdminBookings.jsx';
 import BrowseServices from './pages/BrowseServices.jsx';
 import ListingDetail from './pages/ListingDetail.jsx';
 import MyListings from './pages/MyListings.jsx';
 import Bookings from './pages/Bookings.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+
+
 function App() {
   return (
     <BrowserRouter>
@@ -60,6 +67,17 @@ function App() {
             />
           } />
         </Route>
+
+                {/* ============== ADMIN ROUTES ============== */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="listings" element={<AdminListings />} />
+          <Route path="bookings" element={<AdminBookings />} />
+          
+        </Route>
+
+        
 
         {/* 404 fallback */}
         <Route path="*" element={

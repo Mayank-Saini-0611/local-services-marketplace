@@ -77,9 +77,14 @@ function Login() {
 
       setSuccessMessage(`✓ Welcome back, ${response.fullName}! Redirecting...`);
 
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1500);
+setTimeout(() => {
+  // Redirect admins to admin panel, others to dashboard
+  if (response.role === 'admin') {
+    navigate('/admin');
+  } else {
+    navigate('/dashboard');
+  }
+}, 1500);
 
     } catch (error) {
       console.error('Login error:', error);
