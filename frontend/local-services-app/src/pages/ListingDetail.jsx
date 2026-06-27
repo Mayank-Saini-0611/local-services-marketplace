@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { listingApi } from '../api/listingApi';
+import { favoriteApi } from '../api/favoriteApi';
 import { bookingApi } from '../api/bookingApi';
 import { tokenStorage } from '../utils/tokenStorage';
 import { reviewApi } from '../api/reviewApi';
+import { chatApi } from '../api/chatApi';
 import { 
   ArrowLeft,
   MapPin, 
@@ -18,6 +20,7 @@ import {
   Clock,
   CheckCircle2,
   MessageCircle,
+  MessageSquare,
   ChevronRight,
   Frown,
   Loader2,
@@ -67,7 +70,17 @@ function ListingDetail() {
   const [similarListings, setSimilarListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isFavorite, setIsFavorite] = useState(false);
+ const [isFavorite, setIsFavorite] = useState(false);
+
+// Check if this listing is favorited on mount
+useEffect(() => {
+  if (id) {
+    favoriteApi.getIds()
+      .then(ids => setIsFavorite(ids.includes(parseInt(id))))
+      .catch(err => console.error('Check favorite error:', err));
+  }
+}, [id]); 
+
   const [showContact, setShowContact] = useState(false);
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
 
@@ -274,7 +287,17 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
               {/* Top-right actions */}
               <div className="absolute top-4 right-4 flex gap-2">
                 <button
-                  onClick={() => setIsFavorite(!isFavorite)}
+                  onClick={async () => {
+  const newState = !isFavorite;
+  setIsFavorite(newState);
+  try {
+    if (newState) await favoriteApi.add(parseInt(id));
+    else await favoriteApi.remove(parseInt(id));
+  } catch (err) {
+    console.error('Toggle favorite error:', err);
+    setIsFavorite(!newState);
+  }
+}}
                   className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all"
                 >
                   <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
@@ -402,6 +425,113 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
               </div>
             </div>
           </div>
+
+                    {/* ===== REVIEWS SECTION ===== */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Customer Reviews</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {reviewStats.totalReviews > 0 
+                    ? `${reviewStats.totalReviews} ${reviewStats.totalReviews === 1 ? 'review' : 'reviews'} from verified customers`
+                    : 'No reviews yet'}
+                </p>
+              </div>
+              {reviewStats.totalReviews > 0 && (
+                <div className="text-right">
+                  <div className="flex items-center gap-1 justify-end">
+                    <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                    <span className="text-2xl font-bold text-slate-900">
+                      {reviewStats.averageRating.toFixed(1)}
+                    </span>
+                    <span className="text-slate-400">/5</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {reviewStats.totalReviews > 0 ? (
+              <>
+                {/* Rating Breakdown */}
+                <div className="bg-slate-50 rounded-2xl p-5 mb-6">
+                  <div className="space-y-2">
+                    {[
+                      { stars: 5, count: reviewStats.fiveStars },
+                      { stars: 4, count: reviewStats.fourStars },
+                      { stars: 3, count: reviewStats.threeStars },
+                      { stars: 2, count: reviewStats.twoStars },
+                      { stars: 1, count: reviewStats.oneStar }
+                    ].map(({ stars, count }) => {
+                      const percentage = reviewStats.totalReviews > 0 
+                        ? (count / reviewStats.totalReviews) * 100 
+                        : 0;
+                      return (
+                        <div key={stars} className="flex items-center gap-3">
+                          <div className="flex items-center gap-1 w-16">
+                            <span className="text-sm font-medium text-slate-700">{stars}</span>
+                            <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                          </div>
+                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-yellow-400 transition-all"
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm text-slate-600 w-10 text-right">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Reviews List */}
+                <div className="space-y-4">
+                  {reviews.map(review => (
+                    <div key={review.id} className="border-b border-slate-100 pb-4 last:border-0">
+                      <div className="flex items-start gap-3 mb-2">
+                        <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                          {review.customerName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <p className="font-semibold text-slate-900">{review.customerName}</p>
+                            <span className="text-xs text-slate-400">
+                              {new Date(review.createdAt).toLocaleDateString('en-IN', { 
+                                day: 'numeric', month: 'short', year: 'numeric' 
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex gap-0.5 mt-1">
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <Star 
+                                key={star} 
+                                className={`w-4 h-4 ${
+                                  star <= review.rating 
+                                    ? 'fill-yellow-400 text-yellow-400' 
+                                    : 'text-slate-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {review.comment && (
+                        <p className="text-sm text-slate-700 ml-13 mt-2 whitespace-pre-line">
+                          {review.comment}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12 bg-slate-50 rounded-2xl">
+                <Star className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-600 font-medium">No reviews yet</p>
+                <p className="text-sm text-slate-500 mt-1">Be the first to review this service after booking</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* RIGHT: BOOKING SIDEBAR */}
@@ -422,6 +552,28 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
             >
               <Calendar className="w-4 h-4" />
               Book Now
+            </button>
+
+
+             <button 
+              onClick={async () => {
+                if (!user) { navigate('/login'); return; }
+                if (user.userId === listing.providerId) {
+                  alert("You can't chat with yourself!");
+                  return;
+                }
+                try {
+                  const result = await chatApi.getOrCreateRoom(listing.providerId, listing.id);
+                  navigate('/dashboard/messages');
+                } catch (err) {
+                  console.error('Chat error:', err);
+                  alert('Failed to start chat');
+                }
+              }}
+              className="w-full py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg mb-3 flex items-center justify-center gap-2"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Chat with Provider
             </button>
             
             <button 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
+import { listingApi } from '../api/listingApi';
+import { useTranslation } from 'react-i18next';
 import { tokenStorage } from '../utils/tokenStorage';
 import { 
   User,
@@ -25,6 +27,7 @@ import {
 function Profile() {
   const navigate = useNavigate();
   const user = tokenStorage.getUser();
+    const { t } = useTranslation();
 
   const [profile, setProfile] = useState({
     fullName: user?.fullName || '',
@@ -52,6 +55,8 @@ function Profile() {
 
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
+    const [avatarUrl, setAvatarUrl] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -73,6 +78,24 @@ function Profile() {
       showToast('Failed to load profile', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+
+    const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    try {
+      const result = await listingApi.uploadImage(file);
+      setAvatarUrl(result.url);
+      showToast('Profile photo updated!');
+    } catch (err) {
+      console.error('Avatar upload error:', err);
+      showToast('Failed to upload photo', 'error');
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -187,36 +210,52 @@ function Profile() {
 
       {/* HEADER */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">My Profile</h1>
-        <p className="text-slate-500 mt-1">Manage your personal information and security</p>
+                <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('profile.myProfile')}</h1>
+        <p className="text-slate-500 mt-1">{t('profile.manageInfo')}</p>
       </div>
 
       {/* PROFILE CARD */}
+            {/* PROFILE CARD */}
       <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden">
         
-        {/* Gradient Header */}
-        <div className="h-32 bg-gradient-to-br from-violet-500 via-purple-600 to-indigo-700 relative">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
-        </div>
+        {/* Thin Gradient Top Strip */}
+                {/* Gradient Top Strip */}
+        <div className="h-20 bg-gradient-to-r from-violet-500 via-purple-600 to-indigo-700"></div>
 
         {/* Avatar + Info */}
-        <div className="px-6 pb-6 -mt-16">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
+        <div className="p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
             <div className="relative">
-              <div className="w-32 h-32 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-5xl font-bold shadow-2xl ring-4 ring-white">
-                {profile.fullName.charAt(0).toUpperCase()}
+                            <div className="w-32 h-32 rounded-2xl shadow-2xl ring-4 ring-white overflow-hidden">
+                {uploadingAvatar ? (
+                  <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                  </div>
+                ) : avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-5xl font-bold">
+                    {profile.fullName.charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
-              <button className="absolute bottom-2 right-2 w-9 h-9 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors">
+                            <label className="absolute bottom-2 right-2 w-9 h-9 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer">
                 <Camera className="w-4 h-4 text-slate-600" />
-              </button>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+              </label>
             </div>
 
-            <div className="flex-1 mt-4 sm:mt-0">
+                        <div className="flex-1 mt-2 sm:mt-0 sm:pb-2">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-2xl font-bold text-slate-900">{profile.fullName}</h2>
               </div>
               <p className="text-slate-500 text-sm">{profile.email}</p>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 ${roleBadge.bg} text-white text-xs font-semibold rounded-full shadow-md`}>
                   <RoleIcon className="w-3 h-3" />
                   {roleBadge.label}
@@ -234,8 +273,8 @@ function Profile() {
                 onClick={() => setEditMode(true)}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 font-semibold rounded-xl transition-colors"
               >
-                <Edit2 className="w-4 h-4" />
-                Edit Profile
+                       <Edit2 className="w-4 h-4" />
+                {t('profile.editProfile')}
               </button>
             )}
           </div>
@@ -245,7 +284,7 @@ function Profile() {
             
             {/* Full Name */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Full Name</label>
+               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.fullName')}</label>
               {editMode ? (
                 <div>
                   <div className="relative">
@@ -272,17 +311,16 @@ function Profile() {
 
             {/* Email (read-only) */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.emailAddress')}</label>
               <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
                 <Mail className="w-5 h-5 text-slate-400" />
                 <span className="text-slate-900 font-medium flex-1">{profile.email}</span>
-                <span className="text-xs text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">Cannot change</span>
-              </div>
+                <span className="text-xs text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">{t('profile.cannotChange')}</span>              </div>
             </div>
 
             {/* Phone */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Phone Number</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.phoneNumber')}</label>
               {editMode ? (
                 <div>
                   <div className="relative flex">
@@ -308,7 +346,7 @@ function Profile() {
                 <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
                   <Phone className="w-5 h-5 text-slate-400" />
                   <span className="text-slate-900 font-medium">
-                    {profile.phone ? `+91 ${profile.phone}` : <span className="text-slate-400 italic">Not set</span>}
+                     {profile.phone ? `+91 ${profile.phone}` : <span className="text-slate-400 italic">{t('profile.notSet')}</span>}
                   </span>
                 </div>
               )}
@@ -316,8 +354,7 @@ function Profile() {
 
             {/* Role (read-only) */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Account Type</label>
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.accountType')}</label>              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
                 <Shield className="w-5 h-5 text-slate-400" />
                 <span className="text-slate-900 font-medium capitalize">{profile.role}</span>
               </div>
@@ -332,9 +369,9 @@ function Profile() {
                     setEditData({ fullName: profile.fullName, phone: profile.phone });
                     setEditErrors({});
                   }}
-                  className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl"
+                                   className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleEditSave}
@@ -342,7 +379,7 @@ function Profile() {
                   className="flex-1 py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Save Changes
+                  {t('profile.saveChanges')}
                 </button>
               </div>
             )}
@@ -354,8 +391,8 @@ function Profile() {
       <div className="bg-white rounded-3xl border border-slate-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Security</h3>
-            <p className="text-sm text-slate-500">Manage your password and account security</p>
+                        <h3 className="text-lg font-bold text-slate-900">{t('profile.security')}</h3>
+            <p className="text-sm text-slate-500">{t('profile.managePassword')}</p>
           </div>
         </div>
 
@@ -368,8 +405,8 @@ function Profile() {
               <Lock className="w-5 h-5 text-violet-600" />
             </div>
             <div>
-              <p className="font-semibold text-slate-900">Change Password</p>
-              <p className="text-xs text-slate-500">Update your account password</p>
+                 <p className="font-semibold text-slate-900">{t('profile.changePassword')}</p>
+              <p className="text-xs text-slate-500">{t('profile.updatePassword')}</p>
             </div>
           </div>
           <Edit2 className="w-4 h-4 text-slate-400" />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
+import { useTranslation } from 'react-i18next';
 import { tokenStorage } from '../utils/tokenStorage';
 import { 
   Bell,
@@ -22,6 +23,8 @@ import {
 
 function Settings() {
   const navigate = useNavigate();
+
+  const { t, i18n } = useTranslation();
 
   const [settings, setSettings] = useState({
     emailNotifications: true,
@@ -79,8 +82,8 @@ function Settings() {
 
       {/* HEADER */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">Settings</h1>
-        <p className="text-slate-500 mt-1">Manage your account preferences and privacy</p>
+               <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('settings.settings')}</h1>
+        <p className="text-slate-500 mt-1">{t('settings.managePreferences')}</p>
       </div>
 
       {/* NOTIFICATIONS */}
@@ -90,8 +93,8 @@ function Settings() {
             <Bell className="w-5 h-5 text-violet-600" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-900">Notifications</h3>
-            <p className="text-xs text-slate-500">Choose what you want to be notified about</p>
+             <h3 className="font-bold text-slate-900">{t('settings.notifications')}</h3>
+            <p className="text-xs text-slate-500">{t('settings.notificationsDesc')}</p>
           </div>
         </div>
 
@@ -101,8 +104,8 @@ function Settings() {
             <div className="flex items-start gap-3">
               <Mail className="w-5 h-5 text-slate-500 mt-0.5" />
               <div>
-                <p className="font-semibold text-slate-900">Email Notifications</p>
-                <p className="text-xs text-slate-500">Receive notifications via email</p>
+                <p className="font-semibold text-slate-900">{t('settings.emailNotifications')}</p>
+                <p className="text-xs text-slate-500">{t('settings.receiveViaEmail')}</p>
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -120,8 +123,8 @@ function Settings() {
             <div className="flex items-start gap-3">
               <Bell className="w-5 h-5 text-slate-500 mt-0.5" />
               <div>
-                <p className="font-semibold text-slate-900">Booking Updates</p>
-                <p className="text-xs text-slate-500">Get notified about booking status changes</p>
+                   <p className="font-semibold text-slate-900">{t('settings.bookingUpdates')}</p>
+                <p className="text-xs text-slate-500">{t('settings.bookingUpdatesDesc')}</p>
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -139,8 +142,8 @@ function Settings() {
             <div className="flex items-start gap-3">
               <Mail className="w-5 h-5 text-slate-500 mt-0.5" />
               <div>
-                <p className="font-semibold text-slate-900">Marketing Emails</p>
-                <p className="text-xs text-slate-500">Promotional content and offers</p>
+                 <p className="font-semibold text-slate-900">{t('settings.marketingEmails')}</p>
+                <p className="text-xs text-slate-500">{t('settings.marketingDesc')}</p>
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -163,8 +166,8 @@ function Settings() {
             <Shield className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-900">Privacy</h3>
-            <p className="text-xs text-slate-500">Control your data and visibility</p>
+                <h3 className="font-bold text-slate-900">{t('settings.privacy')}</h3>
+            <p className="text-xs text-slate-500">{t('settings.privacyDesc')}</p>
           </div>
         </div>
 
@@ -173,8 +176,8 @@ function Settings() {
             <div className="flex items-start gap-3 mb-3">
               <Eye className="w-5 h-5 text-slate-500 mt-0.5" />
               <div className="flex-1">
-                <p className="font-semibold text-slate-900">Profile Visibility</p>
-                <p className="text-xs text-slate-500">Who can see your profile</p>
+               <p className="font-semibold text-slate-900">{t('settings.profileVisibility')}</p>
+                <p className="text-xs text-slate-500">{t('settings.whoCanSee')}</p>
               </div>
             </div>
             <div className="flex gap-2 ml-8">
@@ -186,7 +189,7 @@ function Settings() {
                     : 'bg-white border border-slate-200 text-slate-600'
                 }`}
               >
-                Public
+                                {t('settings.public')}
               </button>
               <button
                 onClick={() => setSettings({ ...settings, profileVisibility: 'private' })}
@@ -196,7 +199,7 @@ function Settings() {
                     : 'bg-white border border-slate-200 text-slate-600'
                 }`}
               >
-                Private
+                {t('settings.private')}
               </button>
             </div>
           </div>
@@ -210,8 +213,8 @@ function Settings() {
             <Globe className="w-5 h-5 text-green-600" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-900">Preferences</h3>
-            <p className="text-xs text-slate-500">Customize your experience</p>
+              <h3 className="font-bold text-slate-900">{t('settings.preferences')}</h3>
+            <p className="text-xs text-slate-500">{t('settings.customizeExperience')}</p>
           </div>
         </div>
 
@@ -220,13 +223,17 @@ function Settings() {
             <div className="flex items-start gap-3">
               <Globe className="w-5 h-5 text-slate-500 mt-0.5" />
               <div>
-                <p className="font-semibold text-slate-900">Language</p>
-                <p className="text-xs text-slate-500">Interface language</p>
+              <p className="font-semibold text-slate-900">{t('settings.language')}</p>
+                <p className="text-xs text-slate-500">{t('settings.interfaceLanguage')}</p>
               </div>
             </div>
-            <select
-              value={settings.language}
-              onChange={(e) => setSettings({ ...settings, language: e.target.value })}
+                        <select
+              value={i18n.language}
+              onChange={(e) => {
+                i18n.changeLanguage(e.target.value);
+                setSettings({ ...settings, language: e.target.value });
+                showToast('Language changed successfully');
+              }}
               className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-violet-400"
             >
               <option value="en">English</option>
@@ -243,16 +250,16 @@ function Settings() {
             <AlertCircle className="w-5 h-5 text-red-600" />
           </div>
           <div>
-            <h3 className="font-bold text-red-900">Danger Zone</h3>
-            <p className="text-xs text-red-600">Irreversible actions</p>
+              <h3 className="font-bold text-red-900">{t('settings.dangerZone')}</h3>
+            <p className="text-xs text-red-600">{t('settings.irreversibleActions')}</p>
           </div>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-red-200">
             <div className="flex-1">
-              <p className="font-semibold text-slate-900">Delete Account</p>
-              <p className="text-xs text-slate-500 mt-1">Permanently delete your account and all data. This cannot be undone.</p>
+                            <p className="font-semibold text-slate-900">{t('settings.deleteAccount')}</p>
+              <p className="text-xs text-slate-500 mt-1">{t('settings.deleteAccountDesc')}</p>
             </div>
             <button
               onClick={() => setShowDeleteModal(true)}

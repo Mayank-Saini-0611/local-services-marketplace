@@ -19,6 +19,13 @@ namespace LocalServices.Api.Data
         public DbSet<Review> Reviews { get; set; }
 
         public DbSet<Notification> Notifications { get; set; }
+
+
+        public DbSet<Favorite> Favorites { get; set; }
+
+
+        public DbSet<ChatRoom> ChatRooms { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

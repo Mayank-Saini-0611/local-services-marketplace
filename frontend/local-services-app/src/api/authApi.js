@@ -18,6 +18,7 @@ export const authApi = {
     const response = await axiosClient.post('/auth/login', {
       email: credentials.email,
       password: credentials.password,
+      rememberMe: credentials.rememberMe || false,  
     });
     return response.data;
   },
@@ -64,6 +65,14 @@ export const authApi = {
   // Delete account
   deleteAccount: async () => {
     const response = await axiosClient.delete('/auth/account');
+    return response.data;
+  },
+
+
+
+    // Get current user's stats (role-based)
+  getMyStats: async () => {
+    const response = await axiosClient.get('/auth/my-stats');
     return response.data;
   },
 };

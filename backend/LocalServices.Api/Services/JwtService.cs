@@ -15,13 +15,17 @@ namespace LocalServices.Api.Services
             _configuration = configuration;
         }
 
-        public string GenerateToken(User user)
+        public string GenerateToken(User user, bool rememberMe = false)
         {
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
             var issuer = jwtSettings["Issuer"];
             var audience = jwtSettings["Audience"];
-            var expirationMinutes = int.Parse(jwtSettings["ExpirationInMinutes"] ?? "1440");
+
+            // Default: 24 hours. If rememberMe: 30 days.
+            var expirationMinutes = rememberMe
+                ? 30 * 24 * 60   // 30 days = 43,200 minutes
+                : int.Parse(jwtSettings["ExpirationInMinutes"] ?? "1440");
 
             // Claims = information embedded in the token (about the user)
             var claims = new List<Claim>

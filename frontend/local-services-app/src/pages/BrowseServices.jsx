@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { listingApi } from '../api/listingApi';
 import { categoryApi } from '../api/categoryApi';
+import { favoriteApi } from '../api/favoriteApi';
+import { useTranslation } from 'react-i18next';
 import { useLocation as useAppLocation } from '../context/LocationContext';
 import { 
   Search, 
@@ -20,7 +22,13 @@ import {
 } from 'lucide-react';
 
 // Category image mapping using Unsplash
-const getCategoryImage = (categoryName) => {
+const getListingImage = (listing) => {
+  // Use first uploaded image if available
+  if (listing.imageUrls && listing.imageUrls.length > 0) {
+    return listing.imageUrls[0];
+  }
+  
+  // Fallback to category image
   const imageMap = {
     'Plumber': 'https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=800&q=80',
     'Electrician': 'https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=800&q=80',
@@ -31,13 +39,15 @@ const getCategoryImage = (categoryName) => {
     'AC Repair': 'https://images.unsplash.com/photo-1631545806609-073f5c39d2b9?w=800&q=80',
     'Gardener': 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80',
   };
-  return imageMap[categoryName] || 'https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=800&q=80';
+  return imageMap[listing.categoryName] || 'https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=800&q=80';
 };
 
 function BrowseServices() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { location: userLocation } = useAppLocation();
+
+    const { t } = useTranslation();
   
   // Data states
   const [listings, setListings] = useState([]);
@@ -54,7 +64,16 @@ function BrowseServices() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
+ 
+
   const [favorites, setFavorites] = useState(new Set());
+
+// Load user's existing favorites on mount
+useEffect(() => {
+  favoriteApi.getIds()
+    .then(ids => setFavorites(new Set(ids)))
+    .catch(err => console.error('Load favorites error:', err));
+}, []);
   
   // Filter states (initialize from URL)
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
@@ -69,6 +88,13 @@ function BrowseServices() {
     categoryApi.getAll()
       .then(setCategories)
       .catch(err => console.error('Categories error:', err));
+  }, []);
+
+    // Load user's existing favorites
+  useEffect(() => {
+    favoriteApi.getIds()
+      .then(ids => setFavorites(new Set(ids)))
+      .catch(err => console.error('Load favorites error:', err));
   }, []);
 
   // Build query params and fetch listings
@@ -161,15 +187,30 @@ function BrowseServices() {
     setCurrentPage(1);
   };
 
-  const toggleFavorite = (id, e) => {
+  const toggleFavorite = async (id, e) => {
     e.stopPropagation();
+    const isFav = favorites.has(id);
     setFavorites(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
+      if (isFav) next.delete(id);
       else next.add(id);
       return next;
     });
+    try {
+      if (isFav) await favoriteApi.remove(id);
+      else await favoriteApi.add(id);
+    } catch (err) {
+      console.error('Toggle favorite error:', err);
+      setFavorites(prev => {
+        const next = new Set(prev);
+        if (isFav) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
   };
+
+  
 
   const hasActiveFilters = searchInput || selectedCategory || minPrice || maxPrice || sortBy !== 'newest';
 
@@ -179,9 +220,9 @@ function BrowseServices() {
       {/* ===== PAGE HEADER ===== */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">Browse Services</h1>
+                   <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('browse.browseServices')}</h1>
           <p className="text-slate-500 mt-1">
-            {loading ? 'Loading...' : `${pagination.totalCount} services available in ${userLocation?.city || 'India'}`}
+            {loading ? t('browse.loading') : `${pagination.totalCount} ${t('browse.servicesAvailable')} ${userLocation?.city || 'India'}`}
           </p>
         </div>
         
@@ -221,7 +262,7 @@ function BrowseServices() {
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
-          placeholder="Search services... (e.g., plumber, electrician, tutor)"
+           placeholder={t('browse.searchPlaceholder')}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           className="w-full pl-12 pr-32 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all text-slate-700 placeholder-slate-400"
@@ -230,7 +271,7 @@ function BrowseServices() {
           type="submit"
           className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg transition-all"
         >
-          Search
+              {t('browse.search')}
         </button>
       </form>
 
@@ -243,7 +284,7 @@ function BrowseServices() {
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
             <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <Filter className="w-4 h-4" />
-              Categories
+              {t('browse.categories')}
             </h3>
             <div className="space-y-2">
               <button
@@ -252,7 +293,7 @@ function BrowseServices() {
                   !selectedCategory ? 'bg-violet-50 text-violet-700 font-medium' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                All Categories
+                 {t('browse.allCategories')}
               </button>
               {categories.map(cat => (
                 <button
@@ -270,10 +311,9 @@ function BrowseServices() {
 
           {/* Price Range Filter */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
-            <h3 className="font-semibold text-slate-900 mb-4">Price Range (₹)</h3>
-            <div className="space-y-3">
+ <h3 className="font-semibold text-slate-900 mb-4">{t('browse.priceRange')} (₹)</h3>            <div className="space-y-3">
               <div>
-                <label className="text-xs text-slate-500 mb-1 block">Min Price</label>
+                <label className="text-xs text-slate-500 mb-1 block">{t('browse.minPrice')}</label>
                 <input
                   type="number"
                   placeholder="0"
@@ -283,7 +323,7 @@ function BrowseServices() {
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-500 mb-1 block">Max Price</label>
+                <label className="text-xs text-slate-500 mb-1 block">{t('browse.maxPrice')}</label>
                 <input
                   type="number"
                   placeholder="50000"
@@ -299,16 +339,17 @@ function BrowseServices() {
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
             <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <ArrowUpDown className="w-4 h-4" />
-              Sort By
+                 <ArrowUpDown className="w-4 h-4" />
+              {t('browse.sortBy')}
             </h3>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-violet-400"
             >
-              <option value="newest">Newest First</option>
-              <option value="priceLow">Price: Low to High</option>
-              <option value="priceHigh">Price: High to Low</option>
+              <option value="newest">{t('browse.newestFirst')}</option>
+              <option value="priceLow">{t('browse.priceLowHigh')}</option>
+              <option value="priceHigh">{t('browse.priceHighLow')}</option>
             </select>
           </div>
 
@@ -318,7 +359,7 @@ function BrowseServices() {
               onClick={handleClearFilters}
               className="w-full px-4 py-2.5 text-violet-600 hover:bg-violet-50 border border-violet-200 rounded-xl text-sm font-medium transition-all"
             >
-              Clear All Filters
+                {t('browse.clearFilters')}
             </button>
           )}
         </aside>
@@ -374,8 +415,8 @@ function BrowseServices() {
             // Empty State
             <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
               <Frown className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-slate-700 mb-2">No services found</h3>
-              <p className="text-slate-500 mb-6">Try adjusting your filters or search terms</p>
+                           <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('browse.noServicesFound')}</h3>
+              <p className="text-slate-500 mb-6">{t('browse.tryAdjusting')}</p>
               {hasActiveFilters && (
                 <button
                   onClick={handleClearFilters}
@@ -398,7 +439,7 @@ function BrowseServices() {
                   >
                     <div className="relative h-48 overflow-hidden">
                       <img
-                        src={getCategoryImage(listing.categoryName)}
+                        src={getListingImage(listing)}
                         alt={listing.title}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
@@ -416,10 +457,15 @@ function BrowseServices() {
                       <h3 className="font-bold text-slate-900 line-clamp-1 group-hover:text-violet-600 transition-colors mb-1">
                         {listing.title}
                       </h3>
-                      <p className="text-xs text-slate-500 mb-2">by {listing.providerName}</p>
-                      <div className="flex items-center gap-2 mb-3 text-xs text-slate-500">
+                       <p className="text-xs text-slate-500 mb-2">{t('browse.by')} {listing.providerName}</p>
+                                            <div className="flex items-center gap-2 mb-3 text-xs text-slate-500">
                         <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                        <span className="font-semibold text-slate-700">4.8</span>
+                        <span className="font-semibold text-slate-700">
+                             {listing.averageRating > 0 ? listing.averageRating.toFixed(1) : t('browse.new')}
+                        </span>
+                        {listing.reviewCount > 0 && (
+                          <span className="text-slate-400">({listing.reviewCount})</span>
+                        )}
                         <span>•</span>
                         <MapPin className="w-3 h-3" />
                         {listing.location}
@@ -427,7 +473,7 @@ function BrowseServices() {
                       <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                         <span className="text-lg font-bold text-slate-900">₹{listing.price}</span>
                         <button className="px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-xs font-semibold rounded-lg hover:shadow-lg">
-                          View Details
+                              {t('browse.viewDetails')}
                         </button>
                       </div>
                     </div>
@@ -441,7 +487,7 @@ function BrowseServices() {
                   >
                     <div className="relative h-48 sm:h-auto sm:w-64 overflow-hidden flex-shrink-0">
                       <img
-                        src={getCategoryImage(listing.categoryName)}
+                        src={getListingImage(listing)}
                         alt={listing.title}
                         className="w-full h-full object-cover"
                       />
@@ -455,7 +501,7 @@ function BrowseServices() {
                           <h3 className="font-bold text-lg text-slate-900 group-hover:text-violet-600 transition-colors">
                             {listing.title}
                           </h3>
-                          <p className="text-sm text-slate-500 mt-1">by {listing.providerName}</p>
+                          <p className="text-sm text-slate-500 mt-1">{t('browse.by')} {listing.providerName}</p>
                         </div>
                         <button
                           onClick={(e) => toggleFavorite(listing.id, e)}
@@ -465,10 +511,15 @@ function BrowseServices() {
                         </button>
                       </div>
                       <p className="text-sm text-slate-600 line-clamp-2 mb-3">{listing.description}</p>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+                                            <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
                         <div className="flex items-center gap-1">
                           <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                          <span className="font-semibold text-slate-700">4.8</span>
+                          <span className="font-semibold text-slate-700">
+                              {listing.averageRating > 0 ? listing.averageRating.toFixed(1) : t('browse.new')}
+                          </span>
+                          {listing.reviewCount > 0 && (
+                            <span className="text-slate-400">({listing.reviewCount})</span>
+                          )}
                         </div>
                         <span>•</span>
                         <div className="flex items-center gap-1">
@@ -479,7 +530,7 @@ function BrowseServices() {
                       <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
                         <span className="text-2xl font-bold text-slate-900">₹{listing.price}</span>
                         <button className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg">
-                          View Details
+                              {t('browse.viewDetails')}
                         </button>
                       </div>
                     </div>

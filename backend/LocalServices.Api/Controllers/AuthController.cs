@@ -113,7 +113,8 @@ namespace LocalServices.Api.Controllers
                 return Unauthorized(new { message = "Invalid email or password." });
             }
 
-            var token = _jwtService.GenerateToken(user);
+            // 3. Generate JWT token (30 days if RememberMe, otherwise 24 hours)
+            var token = _jwtService.GenerateToken(user, loginDto.RememberMe);
 
             return Ok(new AuthResponseDto
             {
@@ -362,5 +363,89 @@ namespace LocalServices.Api.Controllers
 
             return Ok(new { message = "Account deleted successfully." });
         }
+
+
+
+
+
+
+
+        // ============================================
+        // GET: api/auth/my-stats
+        // Returns user-specific stats based on role
+        // ============================================
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [HttpGet("my-stats")]
+        public async Task<IActionResult> GetMyStats()
+        {
+            var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim))
+                return Unauthorized(new { message = "Invalid token." });
+
+            var userId = int.Parse(userIdClaim);
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            if (user.Role == "provider")
+            {
+                // Provider stats
+                var listings = await _context.Listings.Where(l => l.ProviderId == userId).ToListAsync();
+                var receivedBookings = await _context.Bookings
+                    .Include(b => b.Listing)
+                    .Where(b => b.Listing!.ProviderId == userId)
+                    .ToListAsync();
+
+                var reviewsReceived = await _context.Reviews
+                    .Where(r => r.ProviderId == userId)
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    role = "provider",
+                    totalListings = listings.Count,
+                    activeListings = listings.Count(l => l.IsActive),
+                    pausedListings = listings.Count(l => !l.IsActive),
+                    totalBookings = receivedBookings.Count,
+                    pendingBookings = receivedBookings.Count(b => b.Status == "pending"),
+                    completedBookings = receivedBookings.Count(b => b.Status == "completed"),
+                    averageRating = reviewsReceived.Any()
+                        ? Math.Round(reviewsReceived.Average(r => r.Rating), 1)
+                        : 0.0,
+                    totalReviews = reviewsReceived.Count
+                });
+            }
+            else if (user.Role == "customer")
+            {
+                // Customer stats
+                var bookings = await _context.Bookings.Where(b => b.CustomerId == userId).ToListAsync();
+                var reviewsGiven = await _context.Reviews.Where(r => r.CustomerId == userId).ToListAsync();
+
+                return Ok(new
+                {
+                    role = "customer",
+                    totalBookings = bookings.Count,
+                    pendingBookings = bookings.Count(b => b.Status == "pending"),
+                    acceptedBookings = bookings.Count(b => b.Status == "accepted"),
+                    completedBookings = bookings.Count(b => b.Status == "completed"),
+                    rejectedBookings = bookings.Count(b => b.Status == "rejected"),
+                    totalReviewsGiven = reviewsGiven.Count
+                });
+            }
+            else
+            {
+                // Admin
+                return Ok(new
+                {
+                    role = "admin",
+                    totalUsers = await _context.Users.CountAsync(),
+                    totalListings = await _context.Listings.CountAsync(),
+                    totalBookings = await _context.Bookings.CountAsync(),
+                    totalReviews = await _context.Reviews.CountAsync()
+                });
+            }
+        }
     }
+
+
+
 }

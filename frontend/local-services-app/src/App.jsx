@@ -5,7 +5,7 @@ import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import DashboardLayout from './components/DashboardLayout.jsx';
-import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import Favorites from './pages/Favorites.jsx';
 import BrowseServices from './pages/BrowseServices.jsx';
 import ListingDetail from './pages/ListingDetail.jsx';
 import MyListings from './pages/MyListings.jsx';
@@ -18,10 +18,14 @@ import AdminDashboard from './pages/AdminDashboard.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import AdminListings from './pages/AdminListings.jsx';
 import AdminBookings from './pages/AdminBookings.jsx';
+import NotificationToast from './components/NotificationToast.jsx';
+import ChatToast from './components/ChatToast.jsx';
 
 function App() {
   return (
     <BrowserRouter>
+      <NotificationToast />
+            <ChatToast />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Navigate to="/login" replace />} />
@@ -40,13 +44,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="messages" element={<Messages />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="favorites" element={
-            <PlaceholderPage 
-              title="Favorites" 
-              description="Your saved service providers."
-              week="Future updates"
-            />
-          } />
+          <Route path="favorites" element={<Favorites />} />
         </Route>
 
         {/* Admin Routes */}
