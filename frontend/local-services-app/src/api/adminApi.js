@@ -54,4 +54,17 @@ export const adminApi = {
     const response = await axiosClient.get('/admin/bookings', { params });
     return response.data;
   },
+
+
+
+    // KYC Requests
+  getKycRequests: async () => {
+    const response = await axiosClient.get('/admin/kyc-requests');
+    return response.data;
+  },
+
+  updateKycStatus: async (id, status) => {
+    const response = await axiosClient.put(`/admin/kyc-requests/${id}/status`, { status });
+    return response.data;
+  },
 };

@@ -186,6 +186,9 @@ namespace LocalServices.Api.Controllers
 
             var me = await _context.Users.FindAsync(userId.Value);
 
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
+            var sanitizedContent = sanitizer.Sanitize(dto.Content.Trim());
+
             var message = new ChatMessage
             {
                 RoomId = dto.RoomId,

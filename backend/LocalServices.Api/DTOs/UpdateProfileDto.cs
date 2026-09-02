@@ -11,6 +11,8 @@ namespace LocalServices.Api.DTOs
 
         [MaxLength(20)]
         public string? Phone { get; set; }
+
+        public string? AvatarUrl { get; set; }
     }
 
     public class ChangePasswordDto
@@ -21,5 +23,18 @@ namespace LocalServices.Api.DTOs
         [Required(ErrorMessage = "New password is required")]
         [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
         public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class SubmitKycDto
+    {
+        [Required(ErrorMessage = "Document URL is required")]
+        public string DocumentUrl { get; set; } = string.Empty;
+    }
+
+    public class UpdateKycStatusDto
+    {
+        [Required]
+        [RegularExpression("^(verified|rejected)$", ErrorMessage = "Status must be 'verified' or 'rejected'")]
+        public string Status { get; set; } = string.Empty;
     }
 }

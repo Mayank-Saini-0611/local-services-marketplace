@@ -13,19 +13,23 @@ import Bookings from './pages/Bookings.jsx';
 import Profile from './pages/Profile.jsx';
 import Settings from './pages/Settings.jsx';
 import Messages from './pages/Messages.jsx';
+import Earnings from './pages/Earnings.jsx';
+import ProviderProfile from './pages/ProviderProfile.jsx';
 import AdminLayout from './components/AdminLayout.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import AdminListings from './pages/AdminListings.jsx';
 import AdminBookings from './pages/AdminBookings.jsx';
+import AdminKyc from './pages/AdminKyc.jsx';
 import NotificationToast from './components/NotificationToast.jsx';
 import ChatToast from './components/ChatToast.jsx';
+import VerifyEmail from './pages/VerifyEmail.jsx';
 
 function App() {
   return (
     <BrowserRouter>
       <NotificationToast />
-            <ChatToast />
+      <ChatToast />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Navigate to="/login" replace />} />
@@ -33,6 +37,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-email" element={<VerifyEmail />} /> {/* <-- ADD THIS ROUTE */}
 
         {/* Dashboard Routes (with shared layout) */}
         <Route path="/dashboard" element={<DashboardLayout />}>
@@ -40,6 +45,8 @@ function App() {
           <Route path="browse" element={<BrowseServices />} />
           <Route path="listing/:id" element={<ListingDetail />} />
           <Route path="my-listings" element={<MyListings />} />
+          <Route path="earnings" element={<Earnings />} />
+          <Route path="provider/:id" element={<ProviderProfile />} />
           <Route path="bookings" element={<Bookings />} />
           <Route path="profile" element={<Profile />} />
           <Route path="messages" element={<Messages />} />
@@ -53,6 +60,7 @@ function App() {
           <Route path="users" element={<AdminUsers />} />
           <Route path="listings" element={<AdminListings />} />
           <Route path="bookings" element={<AdminBookings />} />
+          <Route path="kyc" element={<AdminKyc />} />
         </Route>
 
         {/* 404 fallback */}

@@ -6,6 +6,8 @@ import { bookingApi } from '../api/bookingApi';
 import { tokenStorage } from '../utils/tokenStorage';
 import { reviewApi } from '../api/reviewApi';
 import { chatApi } from '../api/chatApi';
+import { couponApi } from '../api/couponApi';
+import { useTranslation } from 'react-i18next';
 import { 
   ArrowLeft,
   MapPin, 
@@ -26,9 +28,12 @@ import {
   Loader2,
   X,
   Send,
-  AlertCircle
+  AlertCircle,
+  Tag,
+  Briefcase
 } from 'lucide-react';
 
+// Category fallback images
 const getListingImages = (listing) => {
   if (listing.imageUrls && listing.imageUrls.length > 0) {
     return listing.imageUrls;
@@ -65,29 +70,22 @@ function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = tokenStorage.getUser();
-  
+  const { t } = useTranslation();
+
+  // Core Data States
   const [listing, setListing] = useState(null);
   const [similarListings, setSimilarListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
- const [isFavorite, setIsFavorite] = useState(false);
-
-// Check if this listing is favorited on mount
-useEffect(() => {
-  if (id) {
-    favoriteApi.getIds()
-      .then(ids => setIsFavorite(ids.includes(parseInt(id))))
-      .catch(err => console.error('Check favorite error:', err));
-  }
-}, [id]); 
-
+  const [isFavorite, setIsFavorite] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
 
+  // Reviews States
   const [reviews, setReviews] = useState([]);
-const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews: 0, fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStar: 0 });
-  
-  // Booking modal state
+  const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews: 0, fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStar: 0 });
+
+  // Booking Modal States
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [bookingForm, setBookingForm] = useState({
     message: '',
@@ -96,6 +94,21 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
   const [bookingErrors, setBookingErrors] = useState({});
   const [isBooking, setIsBooking] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+
+  // Coupon States
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+
+  // Check if this listing is favorited on mount
+  useEffect(() => {
+    if (id) {
+      favoriteApi.getIds()
+        .then(ids => setIsFavorite(ids.includes(parseInt(id))))
+        .catch(err => console.error('Check favorite error:', err));
+    }
+  }, [id]);
 
   useEffect(() => {
     fetchListing();
@@ -137,6 +150,7 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
       setLoading(false);
     }
   };
+
   const handleShare = async () => {
     if (navigator.share) {
       try {
@@ -155,13 +169,11 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
   };
 
   const handleOpenBookingModal = () => {
-    // Check if user is logged in
     if (!user) {
       navigate('/login');
       return;
     }
 
-    // Provider can't book own listing
     if (user.userId === listing.providerId) {
       alert("You cannot book your own listing!");
       return;
@@ -170,6 +182,9 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
     setBookingForm({ message: '', preferredDate: '' });
     setBookingErrors({});
     setBookingSuccess(false);
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setCouponError('');
     setShowBookingModal(true);
   };
 
@@ -184,6 +199,26 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
     return Object.keys(errors).length === 0;
   };
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setApplyingCoupon(true);
+    setCouponError('');
+    try {
+      const res = await couponApi.apply(couponCode.trim(), listing.price);
+      if (res.isValid) {
+        setAppliedCoupon(res);
+      } else {
+        setCouponError(res.message);
+        setAppliedCoupon(null);
+      }
+    } catch (err) {
+      setCouponError(err.response?.data?.message || 'Invalid coupon code');
+      setAppliedCoupon(null);
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
     if (!validateBooking()) return;
@@ -192,9 +227,13 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
     setBookingErrors({});
 
     try {
+      const finalMessage = appliedCoupon
+        ? `[PROMO CODE APPLIED: ${appliedCoupon.code} - DISCOUNT: ₹${appliedCoupon.discountAmount}]\n\n${bookingForm.message.trim()}`
+        : bookingForm.message.trim();
+
       const payload = {
         listingId: parseInt(id),
-        message: bookingForm.message.trim(),
+        message: finalMessage,
         preferredDate: bookingForm.preferredDate 
           ? new Date(bookingForm.preferredDate).toISOString() 
           : null,
@@ -203,7 +242,6 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
       await bookingApi.create(payload);
       setBookingSuccess(true);
       
-      // Auto-close modal after 2 seconds
       setTimeout(() => {
         setShowBookingModal(false);
         navigate('/dashboard/bookings');
@@ -247,8 +285,8 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
     );
   }
 
-  // Min date for date picker (today)
   const today = new Date().toISOString().split('T')[0];
+  const images = getListingImages(listing);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -275,11 +313,12 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
         
         {/* LEFT: MAIN CONTENT */}
         <div className="space-y-6">
-                    {/* Hero Image Gallery */}
+          
+          {/* Hero Image Gallery */}
           <div className="space-y-3">
-            <div className="relative h-64 sm:h-96 rounded-3xl overflow-hidden bg-slate-100">
+            <div className="relative h-64 sm:h-96 rounded-3xl overflow-hidden bg-slate-100 shadow-sm border border-slate-200/50">
               <img
-                src={getListingImages(listing)[currentImageIdx]}
+                src={images[currentImageIdx]}
                 alt={listing.title}
                 className="w-full h-full object-cover"
               />
@@ -288,16 +327,16 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
               <div className="absolute top-4 right-4 flex gap-2">
                 <button
                   onClick={async () => {
-  const newState = !isFavorite;
-  setIsFavorite(newState);
-  try {
-    if (newState) await favoriteApi.add(parseInt(id));
-    else await favoriteApi.remove(parseInt(id));
-  } catch (err) {
-    console.error('Toggle favorite error:', err);
-    setIsFavorite(!newState);
-  }
-}}
+                    const newState = !isFavorite;
+                    setIsFavorite(newState);
+                    try {
+                      if (newState) await favoriteApi.add(parseInt(id));
+                      else await favoriteApi.remove(parseInt(id));
+                    } catch (err) {
+                      console.error('Toggle favorite error:', err);
+                      setIsFavorite(!newState);
+                    }
+                  }}
                   className="w-11 h-11 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white shadow-lg transition-all"
                 >
                   <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
@@ -316,17 +355,17 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
               </span>
               
               {/* Image counter (if multiple) */}
-              {getListingImages(listing).length > 1 && (
+              {images.length > 1 && (
                 <span className="absolute bottom-4 right-4 px-3 py-1 bg-black/60 backdrop-blur-md text-white text-xs font-semibold rounded-full">
-                  {currentImageIdx + 1} / {getListingImages(listing).length}
+                  {currentImageIdx + 1} / {images.length}
                 </span>
               )}
             </div>
             
             {/* Thumbnail Strip */}
-            {getListingImages(listing).length > 1 && (
+            {images.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-2">
-                {getListingImages(listing).map((url, idx) => (
+                {images.map((url, idx) => (
                   <button
                     key={idx}
                     onClick={() => setCurrentImageIdx(idx)}
@@ -342,17 +381,14 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
               </div>
             )}
           </div>
-          
-          
-            
-            
 
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
+          {/* Title and Ratings Card */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8 shadow-sm">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div className="flex-1">
                 <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-3">{listing.title}</h1>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                                    <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1">
                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                     <span className="font-semibold text-slate-700">
                       {reviewStats.averageRating > 0 ? reviewStats.averageRating.toFixed(1) : 'No ratings'}
@@ -371,7 +407,7 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
                   <span className="text-slate-300">•</span>
                   <div className="flex items-center gap-1 text-green-600">
                     <CheckCircle2 className="w-4 h-4" />
-                    Verified
+                    Verified Partner
                   </div>
                 </div>
               </div>
@@ -389,12 +425,14 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
+          {/* Description */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8 shadow-sm">
             <h2 className="text-xl font-bold text-slate-900 mb-4">About this service</h2>
-            <p className="text-slate-700 leading-relaxed whitespace-pre-line">{listing.description}</p>
+            <p className="text-slate-700 leading-relaxed whitespace-pre-line text-sm">{listing.description}</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
+          {/* Inclusions */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8 shadow-sm">
             <h2 className="text-xl font-bold text-slate-900 mb-4">What's included</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {['Professional service delivery', 'Tools & equipment included', 'Service warranty', 'Free quote estimate', 'Punctual & reliable', 'Quality guaranteed'].map((item, idx) => (
@@ -406,7 +444,8 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
+          {/* Service Meta Specs */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8 shadow-sm">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Service Details</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div>
@@ -426,8 +465,8 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
             </div>
           </div>
 
-                    {/* ===== REVIEWS SECTION ===== */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8">
+          {/* ===== REVIEWS SECTION ===== */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 lg:p-8 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Customer Reviews</h2>
@@ -541,21 +580,20 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
             <div className="mb-4">
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-3xl font-bold text-slate-900">₹{listing.price}</span>
-                <span className="text-sm text-slate-500">starting</span>
+                <span className="text-sm text-slate-500 font-medium">starting</span>
               </div>
               <p className="text-xs text-slate-500">Final price may vary based on requirements</p>
             </div>
 
             <button 
               onClick={handleOpenBookingModal}
-              className="w-full py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg shadow-violet-200 mb-3 flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg shadow-violet-200 mb-3 flex items-center justify-center gap-2"
             >
               <Calendar className="w-4 h-4" />
               Book Now
             </button>
 
-
-             <button 
+            <button 
               onClick={async () => {
                 if (!user) { navigate('/login'); return; }
                 if (user.userId === listing.providerId) {
@@ -563,7 +601,7 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
                   return;
                 }
                 try {
-                  const result = await chatApi.getOrCreateRoom(listing.providerId, listing.id);
+                  await chatApi.getOrCreateRoom(listing.providerId, listing.id);
                   navigate('/dashboard/messages');
                 } catch (err) {
                   console.error('Chat error:', err);
@@ -617,14 +655,23 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 p-6">
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Service Provider</h3>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                {listing.providerName.charAt(0).toUpperCase()}
+            
+            <div 
+              onClick={() => navigate(`/dashboard/provider/${listing.providerId}`)}
+              className="flex items-center gap-3 mb-4 cursor-pointer group hover:bg-slate-50 p-2 -mx-2 rounded-xl transition-colors"
+            >
+              <div className="w-14 h-14 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 group-hover:shadow-md transition-all">
+                {listing.providerName?.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-900 truncate">{listing.providerName}</p>
+                <p className="font-bold text-slate-900 truncate group-hover:text-violet-600 transition-colors flex items-center gap-1.5">
+                  {listing.providerName}
+                  {listing.providerKycStatus === 'verified' && (
+                    <Shield className="w-4 h-4 text-blue-500 fill-blue-500 flex-shrink-0" title="Verified Professional" />
+                  )}
+                </p>
                 <div className="flex items-center gap-1 text-xs text-slate-500">
                   <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                   <span className="font-semibold">4.9</span>
@@ -659,7 +706,7 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
             {similarListings.map(item => (
               <div key={item.id} onClick={() => navigate(`/dashboard/listing/${item.id}`)} className="group bg-white rounded-2xl border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden cursor-pointer">
                 <div className="relative h-40 overflow-hidden">
-                  <img src={getCategoryImage(item.categoryName)} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <img src={getListingImages(item)[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   <span className="absolute top-3 left-3 px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-semibold text-violet-700 rounded-full">
                     {item.categoryName}
                   </span>
@@ -682,16 +729,16 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
       )}
 
       {/* ============================================ */}
-      {/* BOOKING MODAL */}
+      {/* BOOKING MODAL WITH PROMO CODE */}
       {/* ============================================ */}
       {showBookingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             
             {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-slate-100 p-6 flex items-center justify-between">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Book This Service</h2>
+                <h3 className="text-xl font-bold text-slate-900">Book This Service</h3>
                 <p className="text-sm text-slate-500 mt-0.5">{listing.title}</p>
               </div>
               <button onClick={() => setShowBookingModal(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
@@ -728,7 +775,12 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
                     {listing.providerName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-bold text-slate-900">{listing.providerName}</p>
+                    <div className="flex items-center gap-1">
+                      <p className="font-bold text-slate-900 truncate">{listing.providerName}</p>
+                      {listing.providerKycStatus === 'verified' && (
+                        <Shield className="w-4 h-4 text-blue-500 fill-blue-500" title="Verified Professional" />
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500">Will receive your request via email</p>
                   </div>
                 </div>
@@ -751,7 +803,7 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
                       setBookingForm({ ...bookingForm, message: e.target.value });
                       if (bookingErrors.message) setBookingErrors({ ...bookingErrors, message: '' });
                     }}
-                    rows="5"
+                    rows="4"
                     placeholder="Hi! I need this service for... (describe your requirements)"
                     className={`w-full px-4 py-3 bg-white border ${bookingErrors.message ? 'border-red-400' : 'border-slate-200'} rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 resize-none`}
                   />
@@ -778,15 +830,67 @@ const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews:
                   />
                 </div>
 
-                {/* Service Summary */}
+                {/* PROMO / COUPON CODE SECTION */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Have a Promo Code?
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        setCouponError('');
+                      }}
+                      placeholder="e.g. WELCOME50"
+                      className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono uppercase focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={applyingCoupon || !couponCode.trim()}
+                      className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {applyingCoupon ? '...' : 'Apply'}
+                    </button>
+                  </div>
+                  {couponError && (
+                    <p className="text-xs text-red-600 font-medium">{couponError}</p>
+                  )}
+                  {appliedCoupon && (
+                    <div className="p-2 bg-green-100 text-green-800 rounded text-xs font-medium flex items-center justify-between">
+                      <span>✓ {appliedCoupon.message}</span>
+                      <span className="font-bold">-₹{appliedCoupon.discountAmount}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Service Summary with Discount Calculation */}
+                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Original Price</span>
+                    <span className="font-semibold text-slate-900">₹{listing.price}</span>
+                  </div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-sm text-green-600 font-medium">
+                      <span>Coupon Discount ({appliedCoupon.code})</span>
+                      <span className="font-bold">- ₹{appliedCoupon.discountAmount}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-base pt-2 border-t border-slate-200 font-bold">
+                    <span>Final Price</span>
+                    <span className="text-violet-700">
+                      ₹{appliedCoupon ? appliedCoupon.finalAmount : listing.price}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Service Summary Meta */}
                 <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Service</span>
                     <span className="font-semibold text-slate-900 truncate ml-2">{listing.title}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Starting Price</span>
-                    <span className="font-semibold text-slate-900">₹{listing.price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Location</span>

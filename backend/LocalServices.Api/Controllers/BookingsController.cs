@@ -17,12 +17,18 @@ namespace LocalServices.Api.Controllers
         private readonly AppDbContext _context;
         private readonly EmailService _emailService;
         private readonly NotificationService _notificationService;
+        private readonly InvoiceService _invoiceService;
 
-        public BookingsController(AppDbContext context, EmailService emailService, NotificationService notificationService)
+        public BookingsController(
+            AppDbContext context,
+            EmailService emailService,
+            NotificationService notificationService,
+            InvoiceService invoiceService)
         {
             _context = context;
             _emailService = emailService;
             _notificationService = notificationService;
+            _invoiceService = invoiceService;
         }
 
         // ============================================
@@ -59,6 +65,8 @@ namespace LocalServices.Api.Controllers
             var customer = await _context.Users.FindAsync(customerId.Value);
             if (customer == null)
                 return Unauthorized(new { message = "Customer not found." });
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
+            dto.Message = sanitizer.Sanitize(dto.Message);
 
             // Create booking
             var newBooking = new Booking
@@ -379,6 +387,9 @@ namespace LocalServices.Api.Controllers
         // ============================================
         // HELPER
         // ============================================
+        // ============================================
+        // HELPERS
+        // ============================================
         private int? GetCurrentUserId()
         {
             var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -387,5 +398,63 @@ namespace LocalServices.Api.Controllers
             if (int.TryParse(userIdClaim, out int userId)) return userId;
             return null;
         }
+
+        private string? GetCurrentUserRole()
+        {
+            return User.FindFirst("role")?.Value
+                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        }
+    
+
+
+
+// ============================================
+// GET: api/bookings/{id}/invoice
+// Download generated PDF invoice
+// ============================================
+[HttpGet("{id}/invoice")]
+        public async Task<IActionResult> DownloadInvoice(int id)
+        {
+            var userId = GetCurrentUserId();
+            var userRole = GetCurrentUserRole();
+            if (userId == null) return Unauthorized();
+
+            var booking = await _context.Bookings
+                .Include(b => b.Listing!).ThenInclude(l => l.Provider)
+                .Include(b => b.Listing!).ThenInclude(l => l.Category)
+                .Include(b => b.Customer)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (booking == null)
+                return NotFound(new { message = "Booking not found." });
+
+            // Security check: Only Customer, Provider, or Admin can download the invoice
+            if (booking.CustomerId != userId.Value &&
+                booking.Listing!.ProviderId != userId.Value &&
+                userRole != "admin")
+            {
+                return Forbid();
+            }
+
+            var pdfBytes = _invoiceService.GenerateInvoicePdf(booking);
+            var fileName = $"Invoice-Booking-{booking.Id}.pdf";
+
+            return File(pdfBytes, "application/pdf", fileName);
+        }
+
+
+
+
+
+
+
+
+
+
+
     }
+
+
+
+
 }

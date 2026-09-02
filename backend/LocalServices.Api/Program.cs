@@ -1,6 +1,6 @@
 using LocalServices.Api.Data;
-using LocalServices.Api.Services;
 using LocalServices.Api.Hubs;
+using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -9,11 +9,10 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// 1. Controllers & Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// Configure Swagger with JWT support
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
@@ -23,7 +22,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Enter JWT token (no need to add 'Bearer' prefix, Swagger adds it)"
+        Description = "Enter JWT token without 'Bearer '"
     });
 
     options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
@@ -42,7 +41,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// ✅ Add CORS — Allow React frontend to call backend
+// 2. CORS Policy (Configured for Vite Ports)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
@@ -57,28 +56,25 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     });
 });
-// Register AppDbContext with PostgreSQL
+
+// 3. Database Context
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Register JwtService for dependency injection
+// 4. Application Services
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<EmailService>();
-
 builder.Services.AddScoped<CloudinaryService>();
-
-
-
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<InvoiceService>();
 
-// Add SignalR
+// 5. SignalR
 builder.Services.AddSignalR();
 
-// Disable default claim mapping (so JWT claim names stay as-is)
+// 6. JWT Authentication
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
-
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
+var secretKey = jwtSettings["SecretKey"] ?? "ThisIsMySuperSecretKeyForJwtTokenGenerationLocalServices2026MustBeLongEnough";
 
 builder.Services.AddAuthentication(options =>
 {
@@ -93,13 +89,13 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = jwtSettings["Issuer"] ?? "LocalServicesMarketplace",
+        ValidAudience = jwtSettings["Audience"] ?? "LocalServicesMarketplaceUsers",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
         ClockSkew = TimeSpan.Zero
     };
 
-    // Support JWT in query string for SignalR (since WebSocket headers can't be set easily)
+    // WebSocket Query Token Support for SignalR
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
@@ -116,7 +112,7 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Role-based authorization
+// 7. Authorization Policies
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
@@ -125,7 +121,10 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ============================================
+// PIPELINE ORDER (CRITICAL: CORS FIRST)
+// ============================================
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -134,14 +133,25 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// ✅ Enable CORS BEFORE Authentication
+// CORS must run before Authentication and Custom Middleware
 app.UseCors("AllowReactApp");
 
-// Authentication MUST come before Authorization
+// Security Headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Hubs and Endpoints
 app.MapControllers();
-app.MapHub<LocalServices.Api.Hubs.NotificationHub>("/notificationHub");
-app.MapHub<LocalServices.Api.Hubs.ChatHub>("/chatHub");
+app.MapHub<NotificationHub>("/notificationHub");
+app.MapHub<ChatHub>("/chatHub");
+
 app.Run();

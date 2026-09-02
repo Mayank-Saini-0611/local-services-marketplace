@@ -73,6 +73,7 @@ namespace LocalServices.Api.Controllers
                 .Take(pageSize)
                 .Select(l => new ListingResponseDto
                 {
+                    ProviderKycStatus = l.Provider!.KycStatus,
                     Id = l.Id,
                     Title = l.Title,
                     Description = l.Description,
@@ -139,6 +140,7 @@ namespace LocalServices.Api.Controllers
                 .Where(l => l.Id == id)
                 .Select(l => new ListingResponseDto
                 {
+                    ProviderKycStatus = l.Provider!.KycStatus,
                     Id = l.Id,
                     Title = l.Title,
                     Description = l.Description,
@@ -192,6 +194,7 @@ namespace LocalServices.Api.Controllers
                 .OrderByDescending(l => l.CreatedAt)
                 .Select(l => new ListingResponseDto
                 {
+                    ProviderKycStatus = l.Provider!.KycStatus,
                     Id = l.Id,
                     Title = l.Title,
                     Description = l.Description,
@@ -252,6 +255,13 @@ namespace LocalServices.Api.Controllers
             if (!categoryExists)
                 return BadRequest(new { message = $"Category with ID {dto.CategoryId} does not exist." });
 
+
+            // Sanitize user input to prevent XSS
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
+            dto.Title = sanitizer.Sanitize(dto.Title);
+            dto.Description = sanitizer.Sanitize(dto.Description);
+            dto.Location = sanitizer.Sanitize(dto.Location);
+
             var newListing = new Listing
             {
                 ProviderId = userId.Value,
@@ -277,6 +287,7 @@ namespace LocalServices.Api.Controllers
                 .Where(l => l.Id == newListing.Id)
                 .Select(l => new ListingResponseDto
                 {
+                    ProviderKycStatus = l.Provider!.KycStatus,
                     Id = l.Id,
                     Title = l.Title,
                     Description = l.Description,
@@ -329,6 +340,13 @@ namespace LocalServices.Api.Controllers
             var categoryExists = await _context.Categories.AnyAsync(c => c.Id == dto.CategoryId);
             if (!categoryExists)
                 return BadRequest(new { message = $"Category with ID {dto.CategoryId} does not exist." });
+
+
+            // Sanitize user input to prevent XSS
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
+            dto.Title = sanitizer.Sanitize(dto.Title);
+            dto.Description = sanitizer.Sanitize(dto.Description);
+            dto.Location = sanitizer.Sanitize(dto.Location);
 
             // Update fields
             listing.CategoryId = dto.CategoryId;

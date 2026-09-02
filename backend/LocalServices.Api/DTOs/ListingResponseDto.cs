@@ -27,5 +27,6 @@
 
         public double AverageRating { get; set; }
         public int ReviewCount { get; set; }
+        public string ProviderKycStatus { get; set; } = "unverified";
     }
 }

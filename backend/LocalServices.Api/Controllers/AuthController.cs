@@ -6,6 +6,7 @@ using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
+using Google.Apis.Auth;
 
 namespace LocalServices.Api.Controllers
 {
@@ -28,24 +29,18 @@ namespace LocalServices.Api.Controllers
             _notificationService = notificationService;
         }
 
-
-
+        // ============================================
         // POST: api/auth/register
+        // ============================================
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto registerDto)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
-            var emailExists = await _context.Users
-                .AnyAsync(u => u.Email == registerDto.Email);
-
+            var emailExists = await _context.Users.AnyAsync(u => u.Email == registerDto.Email);
             if (emailExists)
-            {
                 return BadRequest(new { message = "Email is already registered." });
-            }
 
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password);
 
@@ -60,8 +55,30 @@ namespace LocalServices.Api.Controllers
                 UpdatedAt = DateTime.UtcNow
             };
 
+            // Generate email verification token
+            var verificationToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                .Replace("+", "-").Replace("/", "_").Replace("=", "");
+
+            newUser.EmailVerificationToken = verificationToken;
+            newUser.EmailVerified = false;
+
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
+
+            // Send verification email
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
+            var verifyLink = $"{frontendUrl}/verify-email?token={verificationToken}";
+
+            _ = Task.Run(async () =>
+            {
+                var emailBody = _emailService.BuildEmailVerificationEmail(newUser.FullName, verifyLink);
+                await _emailService.SendEmailAsync(
+                    newUser.Email,
+                    newUser.FullName,
+                    "📧 Verify Your Email - Local Services Marketplace",
+                    emailBody
+                );
+            });
 
             // Notify all admins of new registration
             var admins = await _context.Users.Where(u => u.Role == "admin").ToListAsync();
@@ -77,7 +94,7 @@ namespace LocalServices.Api.Controllers
             }
 
             // Generate JWT token for the newly registered user
-            var token = _jwtService.GenerateToken(newUser);
+            var token = _jwtService.GenerateToken(newUser, false);
 
             return Ok(new AuthResponseDto
             {
@@ -89,31 +106,26 @@ namespace LocalServices.Api.Controllers
             });
         }
 
+        // ============================================
         // POST: api/auth/login
+        // ============================================
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
             if (user == null)
-            {
                 return Unauthorized(new { message = "Invalid email or password." });
-            }
 
             var isPasswordValid = BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash);
 
             if (!isPasswordValid)
-            {
                 return Unauthorized(new { message = "Invalid email or password." });
-            }
 
-            // 3. Generate JWT token (30 days if RememberMe, otherwise 24 hours)
+            // Generate JWT token (30 days if RememberMe, otherwise 24 hours)
             var token = _jwtService.GenerateToken(user, loginDto.RememberMe);
 
             return Ok(new AuthResponseDto
@@ -126,28 +138,107 @@ namespace LocalServices.Api.Controllers
             });
         }
 
-        // GET: api/auth/me — Returns current logged-in user info
+        // ============================================
+        // POST: api/auth/google-login
+        // Sign in or Register using Google OAuth 2.0
+        // ============================================
+        [HttpPost("google-login")]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleAuthDto dto)
+        {
+            var clientId = _configuration["GoogleAuth:ClientId"];
+            if (string.IsNullOrEmpty(clientId))
+                return BadRequest(new { message = "Google Auth is not configured on the server." });
+
+            try
+            {
+                // 1. Validate the Google JWT Token cryptographically
+                var settings = new GoogleJsonWebSignature.ValidationSettings()
+                {
+                    Audience = new List<string>() { clientId }
+                };
+
+                var payload = await GoogleJsonWebSignature.ValidateAsync(dto.IdToken, settings);
+
+                if (payload == null)
+                    return BadRequest(new { message = "Invalid Google token." });
+
+                // 2. Check if user already exists
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == payload.Email);
+
+                // 3. If user doesn't exist, create a new one (Auto-Registration)
+                if (user == null)
+                {
+                    user = new User
+                    {
+                        FullName = payload.Name ?? "Google User",
+                        Email = payload.Email,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // Random unguessable password
+                        Role = string.IsNullOrEmpty(dto.Role) ? "customer" : dto.Role,
+                        EmailVerified = payload.EmailVerified,
+                        KycStatus = "unverified",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    _context.Users.Add(user);
+                    await _context.SaveChangesAsync();
+
+                    // Notify Admins
+                    var admins = await _context.Users.Where(u => u.Role == "admin").ToListAsync();
+                    foreach (var admin in admins)
+                    {
+                        await _notificationService.SendNotificationAsync(
+                            userId: admin.Id,
+                            type: "user_registered",
+                            title: "New Google User 👤",
+                            message: $"{user.FullName} joined via Google",
+                            link: "/admin/users"
+                        );
+                    }
+                }
+
+                // 4. Generate standard application JWT (valid for 30 days for convenience)
+                var token = _jwtService.GenerateToken(user, true);
+
+                return Ok(new AuthResponseDto
+                {
+                    UserId = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email,
+                    Role = user.Role,
+                    Token = token
+                });
+            }
+            catch (InvalidJwtException)
+            {
+                return BadRequest(new { message = "Google token validation failed or expired." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Google authentication failed.", error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // GET: api/auth/me
+        // ============================================
         [Microsoft.AspNetCore.Authorization.Authorize]
         [HttpGet("me")]
         public async Task<IActionResult> GetCurrentUser()
         {
             var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-
             if (string.IsNullOrEmpty(userIdClaim))
-            {
                 return Unauthorized(new { message = "Invalid token." });
-            }
 
             var userId = int.Parse(userIdClaim);
             var user = await _context.Users.FindAsync(userId);
-
             if (user == null)
-            {
                 return NotFound(new { message = "User not found." });
-            }
 
             return Ok(new
             {
+                kycStatus = user.KycStatus,
+                avatarUrl = user.AvatarUrl, // <-- ADD THIS
                 userId = user.Id,
                 fullName = user.FullName,
                 email = user.Email,
@@ -156,6 +247,32 @@ namespace LocalServices.Api.Controllers
                 createdAt = user.CreatedAt
             });
         }
+
+
+
+
+
+
+
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [HttpPost("upload-avatar")]
+        public async Task<IActionResult> UploadAvatar([FromBody] SubmitKycDto dto)
+        {
+            var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
+
+            var user = await _context.Users.FindAsync(int.Parse(userIdClaim));
+            if (user == null) return NotFound();
+
+            user.AvatarUrl = dto.DocumentUrl;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Avatar updated", avatarUrl = user.AvatarUrl });
+        }
+
+
+
 
         // ============================================
         // POST: api/auth/forgot-password
@@ -168,33 +285,19 @@ namespace LocalServices.Api.Controllers
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
 
-            // Security: Don't reveal if email exists (prevent email enumeration attacks)
             if (user == null)
-            {
                 return Ok(new { message = "If an account exists with this email, you'll receive a password reset link shortly." });
-            }
 
-            // Generate cryptographically secure random token (64 chars)
             var tokenBytes = new byte[48];
             RandomNumberGenerator.Fill(tokenBytes);
-            var rawToken = Convert.ToBase64String(tokenBytes)
-                .Replace("+", "-")
-                .Replace("/", "_")
-                .Replace("=", "");
-
-            // Hash the token before storing (so DB breach doesn't leak tokens)
+            var rawToken = Convert.ToBase64String(tokenBytes).Replace("+", "-").Replace("/", "_").Replace("=", "");
             var tokenHash = BCrypt.Net.BCrypt.HashPassword(rawToken);
 
-            // Invalidate any existing unused tokens for this user
             var existingTokens = await _context.PasswordResetTokens
                 .Where(t => t.UserId == user.Id && !t.Used && t.ExpiresAt > DateTime.UtcNow)
                 .ToListAsync();
-            foreach (var t in existingTokens)
-            {
-                t.Used = true;
-            }
+            foreach (var t in existingTokens) { t.Used = true; }
 
-            // Create new token (expires in 1 hour)
             var resetToken = new PasswordResetToken
             {
                 UserId = user.Id,
@@ -207,11 +310,9 @@ namespace LocalServices.Api.Controllers
             _context.PasswordResetTokens.Add(resetToken);
             await _context.SaveChangesAsync();
 
-            // Build reset link
             var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
             var resetLink = $"{frontendUrl}/reset-password?token={rawToken}";
 
-            // Send email asynchronously
             _ = Task.Run(async () =>
             {
                 var emailBody = _emailService.BuildPasswordResetEmail(user.FullName, resetLink);
@@ -235,13 +336,11 @@ namespace LocalServices.Api.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // Get all non-expired, unused tokens
             var validTokens = await _context.PasswordResetTokens
                 .Include(t => t.User)
                 .Where(t => !t.Used && t.ExpiresAt > DateTime.UtcNow)
                 .ToListAsync();
 
-            // Find the token by checking each hash (BCrypt verify is one-way)
             PasswordResetToken? matchingToken = null;
             foreach (var token in validTokens)
             {
@@ -253,26 +352,16 @@ namespace LocalServices.Api.Controllers
             }
 
             if (matchingToken == null)
-            {
                 return BadRequest(new { message = "Invalid or expired reset token. Please request a new password reset." });
-            }
 
-            // Update user password
             matchingToken.User!.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             matchingToken.User.UpdatedAt = DateTime.UtcNow;
-
-            // Mark token as used (one-time use)
             matchingToken.Used = true;
 
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Password reset successfully! You can now log in with your new password." });
         }
-
-
-
-
-
 
         // ============================================
         // PUT: api/auth/profile
@@ -281,20 +370,21 @@ namespace LocalServices.Api.Controllers
         [HttpPut("profile")]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
             var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim))
-                return Unauthorized(new { message = "Invalid token." });
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized(new { message = "Invalid token." });
 
             var userId = int.Parse(userIdClaim);
             var user = await _context.Users.FindAsync(userId);
-            if (user == null)
-                return NotFound(new { message = "User not found." });
+            if (user == null) return NotFound(new { message = "User not found." });
 
             user.FullName = dto.FullName.Trim();
             user.Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim();
+            if (!string.IsNullOrEmpty(dto.AvatarUrl))
+            {
+                user.AvatarUrl = dto.AvatarUrl; // <-- ADD THIS
+            }
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -306,7 +396,8 @@ namespace LocalServices.Api.Controllers
                 fullName = user.FullName,
                 email = user.Email,
                 phone = user.Phone,
-                role = user.Role
+                role = user.Role,
+                avatarUrl = user.AvatarUrl
             });
         }
 
@@ -317,29 +408,47 @@ namespace LocalServices.Api.Controllers
         [HttpPut("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
             var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim))
-                return Unauthorized(new { message = "Invalid token." });
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized(new { message = "Invalid token." });
 
             var userId = int.Parse(userIdClaim);
             var user = await _context.Users.FindAsync(userId);
-            if (user == null)
-                return NotFound(new { message = "User not found." });
+            if (user == null) return NotFound(new { message = "User not found." });
 
-            // Verify current password
             if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
                 return BadRequest(new { message = "Current password is incorrect." });
 
-            // Update password
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Password changed successfully." });
+        }
+
+        // ============================================
+        // POST: api/auth/submit-kyc
+        // ============================================
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "provider")]
+        [HttpPost("submit-kyc")]
+        public async Task<IActionResult> SubmitKyc([FromBody] SubmitKycDto dto)
+        {
+            var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized();
+
+            var user = await _context.Users.FindAsync(int.Parse(userIdClaim));
+            if (user == null) return NotFound();
+
+            user.KycDocumentUrl = dto.DocumentUrl;
+            user.KycStatus = "pending";
+            user.KycSubmittedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "KYC document submitted successfully. Pending admin approval.", status = user.KycStatus });
         }
 
         // ============================================
@@ -350,13 +459,11 @@ namespace LocalServices.Api.Controllers
         public async Task<IActionResult> DeleteAccount()
         {
             var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim))
-                return Unauthorized(new { message = "Invalid token." });
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized(new { message = "Invalid token." });
 
             var userId = int.Parse(userIdClaim);
             var user = await _context.Users.FindAsync(userId);
-            if (user == null)
-                return NotFound(new { message = "User not found." });
+            if (user == null) return NotFound(new { message = "User not found." });
 
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
@@ -364,23 +471,15 @@ namespace LocalServices.Api.Controllers
             return Ok(new { message = "Account deleted successfully." });
         }
 
-
-
-
-
-
-
         // ============================================
         // GET: api/auth/my-stats
-        // Returns user-specific stats based on role
         // ============================================
         [Microsoft.AspNetCore.Authorization.Authorize]
         [HttpGet("my-stats")]
         public async Task<IActionResult> GetMyStats()
         {
             var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim))
-                return Unauthorized(new { message = "Invalid token." });
+            if (string.IsNullOrEmpty(userIdClaim)) return Unauthorized(new { message = "Invalid token." });
 
             var userId = int.Parse(userIdClaim);
             var user = await _context.Users.FindAsync(userId);
@@ -388,7 +487,6 @@ namespace LocalServices.Api.Controllers
 
             if (user.Role == "provider")
             {
-                // Provider stats
                 var listings = await _context.Listings.Where(l => l.ProviderId == userId).ToListAsync();
                 var receivedBookings = await _context.Bookings
                     .Include(b => b.Listing)
@@ -408,15 +506,12 @@ namespace LocalServices.Api.Controllers
                     totalBookings = receivedBookings.Count,
                     pendingBookings = receivedBookings.Count(b => b.Status == "pending"),
                     completedBookings = receivedBookings.Count(b => b.Status == "completed"),
-                    averageRating = reviewsReceived.Any()
-                        ? Math.Round(reviewsReceived.Average(r => r.Rating), 1)
-                        : 0.0,
+                    averageRating = reviewsReceived.Any() ? Math.Round(reviewsReceived.Average(r => r.Rating), 1) : 0.0,
                     totalReviews = reviewsReceived.Count
                 });
             }
             else if (user.Role == "customer")
             {
-                // Customer stats
                 var bookings = await _context.Bookings.Where(b => b.CustomerId == userId).ToListAsync();
                 var reviewsGiven = await _context.Reviews.Where(r => r.CustomerId == userId).ToListAsync();
 
@@ -433,7 +528,6 @@ namespace LocalServices.Api.Controllers
             }
             else
             {
-                // Admin
                 return Ok(new
                 {
                     role = "admin",
@@ -444,8 +538,27 @@ namespace LocalServices.Api.Controllers
                 });
             }
         }
+
+        // ============================================
+        // GET: api/auth/verify-email?token=xxx
+        // ============================================
+        [HttpGet("verify-email")]
+        public async Task<IActionResult> VerifyEmail([FromQuery] string token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return BadRequest(new { message = "Verification token is required." });
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.EmailVerificationToken == token);
+
+            if (user == null)
+                return BadRequest(new { message = "Invalid or expired verification token." });
+
+            user.EmailVerified = true;
+            user.EmailVerificationToken = null;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Email verified successfully! You can now use all features." });
+        }
     }
-
-
-
 }

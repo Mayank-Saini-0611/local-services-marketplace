@@ -150,6 +150,42 @@ namespace LocalServices.Api.Services
             );
         }
 
+
+
+
+
+
+
+
+
+
+
+
+
+        public string BuildEmailVerificationEmail(string userName, string verifyLink)
+        {
+            return BuildEmailWrapper(
+                headerColor: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                headerIcon: "✉️",
+                headerTitle: "Verify Your Email Address",
+                headerSubtitle: "Welcome to Local Services Marketplace!",
+                bodyContent: $@"
+                    <p style='color: #1e293b; font-size: 16px; margin: 0 0 20px;'>Hi <strong>{userName}</strong>,</p>
+                    <p style='color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;'>
+                        Thank you for registering on Local Services Marketplace. To activate your account and verify your email address, please click the button below:
+                    </p>
+                    <p style='color: #64748b; font-size: 12px; line-height: 1.6; margin: 24px 0 8px;'>
+                        If the button above does not work, copy and paste this link into your browser:
+                    </p>
+                    <p style='color: #8b5cf6; font-size: 12px; word-break: break-all;'>
+                        {verifyLink}
+                    </p>",
+                ctaText: "Verify Email Address",
+                ctaLink: verifyLink,
+                footerNote: "If you did not create an account, you can safely ignore this email."
+            );
+        }
+
         public string BuildPasswordResetEmail(string userName, string resetLink)
         {
             return BuildEmailWrapper(

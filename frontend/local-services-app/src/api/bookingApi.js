@@ -36,4 +36,22 @@ export const bookingApi = {
     const response = await axiosClient.delete(`/bookings/${id}`);
     return response.data;
   },
+
+  // Download booking invoice PDF
+  downloadInvoice: async (bookingId) => {
+    const response = await axiosClient.get(`/bookings/${bookingId}/invoice`, {
+      responseType: 'blob', // Required for binary PDF downloading
+    });
+    
+    // Create blob link and trigger automatic browser download
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Invoice-Booking-${bookingId}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };

@@ -4,6 +4,7 @@ import LottiePlayer from '../components/LottiePlayer';
 import authAnimation from '../assets/auth-animation.json';
 import { authApi } from '../api/authApi';
 import { tokenStorage } from '../utils/tokenStorage';
+import { GoogleLogin } from '@react-oauth/google';
 import { 
   Mail, 
   Lock, 
@@ -29,6 +30,29 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+
+
+    const handleGoogleSuccess = async (credentialResponse) => {
+    setIsSubmitting(true);
+    setErrors({});
+    try {
+      const response = await authApi.googleLogin(credentialResponse.credential);
+      
+      tokenStorage.setAuth(response.token, {
+        userId: response.userId,
+        fullName: response.fullName,
+        email: response.email,
+        role: response.role,
+      });
+
+      setSuccessMessage(`✓ Welcome back, ${response.fullName}! Redirecting...`);
+      setTimeout(() => navigate(response.role === 'admin' ? '/admin' : '/dashboard'), 1500);
+    } catch (error) {
+      setErrors({ general: error.response?.data?.message || 'Google Login failed.' });
+      setIsSubmitting(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -296,6 +320,19 @@ setTimeout(() => {
                   <div className="relative flex justify-center text-xs">
                     <span className="px-3 bg-white text-slate-400">or</span>
                   </div>
+                </div>
+
+
+                 {/* Google Sign In (Fixed Width) */}
+                <div className="flex justify-center w-full">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => setErrors({ general: 'Google Login failed or was closed.' })}
+                    theme="outline"
+                    size="large"
+                    width="350"
+                    useOneTap={false}
+                  />
                 </div>
 
                 <p className="text-center text-slate-500 text-sm">

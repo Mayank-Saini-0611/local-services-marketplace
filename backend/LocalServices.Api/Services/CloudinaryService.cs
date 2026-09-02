@@ -18,32 +18,33 @@ namespace LocalServices.Api.Services
 
             if (string.IsNullOrEmpty(cloudName) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiSecret))
             {
-                throw new InvalidOperationException("Cloudinary credentials not configured");
+                _logger.LogWarning("Cloudinary credentials are not fully configured.");
+                var fallbackAccount = new Account("demo", "demo", "demo");
+                _cloudinary = new Cloudinary(fallbackAccount);
+                return;
             }
 
             var account = new Account(cloudName, apiKey, apiSecret);
             _cloudinary = new Cloudinary(account);
+            _cloudinary.Api.Secure = true;
         }
 
         public async Task<string> UploadImageAsync(IFormFile file, string folder = "local-services")
         {
             if (file == null || file.Length == 0)
-                throw new ArgumentException("File is empty");
+                throw new ArgumentException("Uploaded file is empty");
 
-            // Validate file type
-            var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/webp" };
-            if (!allowedTypes.Contains(file.ContentType.ToLower()))
-                throw new ArgumentException("Invalid file type. Only JPG, PNG, WEBP allowed.");
+            if (file.Length > 10 * 1024 * 1024)
+                throw new ArgumentException("File size exceeds 10 MB limit.");
 
-            // Validate file size (5 MB max)
-            if (file.Length > 5 * 1024 * 1024)
-                throw new ArgumentException("File too large. Max 5 MB.");
-
-            using var stream = file.OpenReadStream();
+            // Use MemoryStream to avoid locked stream pointers
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
 
             var uploadParams = new ImageUploadParams
             {
-                File = new FileDescription(file.FileName, stream),
+                File = new FileDescription(file.FileName, memoryStream),
                 Folder = folder,
                 Transformation = new Transformation()
                     .Width(1200)
@@ -60,37 +61,11 @@ namespace LocalServices.Api.Services
 
             if (result.Error != null)
             {
-                _logger.LogError("Cloudinary upload error: {Error}", result.Error.Message);
-                throw new Exception($"Upload failed: {result.Error.Message}");
+                _logger.LogError("Cloudinary Error: {Message}", result.Error.Message);
+                throw new Exception($"Cloudinary upload failed: {result.Error.Message}");
             }
 
-            return result.SecureUrl.ToString();
-        }
-
-        public async Task<bool> DeleteImageAsync(string imageUrl)
-        {
-            try
-            {
-                // Extract public_id from URL
-                // URL format: https://res.cloudinary.com/{cloud}/image/upload/v123/folder/filename.jpg
-                var uri = new Uri(imageUrl);
-                var pathSegments = uri.AbsolutePath.Split('/');
-                var uploadIndex = Array.IndexOf(pathSegments, "upload");
-                if (uploadIndex < 0 || uploadIndex + 2 >= pathSegments.Length) return false;
-
-                var publicIdWithExt = string.Join('/', pathSegments.Skip(uploadIndex + 2));
-                var publicId = Path.ChangeExtension(publicIdWithExt, null);
-
-                var deleteParams = new DeletionParams(publicId);
-                var result = await _cloudinary.DestroyAsync(deleteParams);
-
-                return result.Result == "ok";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to delete image: {Url}", imageUrl);
-                return false;
-            }
+            return result.SecureUrl?.ToString() ?? result.Url?.ToString() ?? string.Empty;
         }
     }
 }

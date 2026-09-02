@@ -25,6 +25,11 @@ namespace LocalServices.Api.Data
 
 
         public DbSet<ChatRoom> ChatRooms { get; set; }
+
+        public DbSet<Payment> Payments { get; set; }
+
+
+        public DbSet<Coupon> Coupons { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

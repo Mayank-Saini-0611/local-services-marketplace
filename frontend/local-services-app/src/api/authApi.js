@@ -75,4 +75,32 @@ export const authApi = {
     const response = await axiosClient.get('/auth/my-stats');
     return response.data;
   },
+
+
+
+
+
+    // Submit KYC Document (Provider)
+  submitKyc: async (documentUrl) => {
+    const response = await axiosClient.post('/auth/submit-kyc', { documentUrl });
+    return response.data;
+  },
+
+
+    // Google Login
+  googleLogin: async (idToken, role = null) => {
+    const response = await axiosClient.post('/auth/google-login', {
+      idToken,
+      role
+    });
+    return response.data;
+  },
+
+
+
+    // Verify Email via Token
+  verifyEmail: async (token) => {
+    const response = await axiosClient.get(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+    return response.data;
+  },
 };

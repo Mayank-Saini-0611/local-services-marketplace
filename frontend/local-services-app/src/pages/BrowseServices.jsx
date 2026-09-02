@@ -5,20 +5,23 @@ import { categoryApi } from '../api/categoryApi';
 import { favoriteApi } from '../api/favoriteApi';
 import { useTranslation } from 'react-i18next';
 import { useLocation as useAppLocation } from '../context/LocationContext';
-import { 
-  Search, 
-  Filter, 
-  Grid3x3, 
-  List, 
-  MapPin, 
-  Star, 
+import ServiceMap from '../components/ServiceMap'; 
+import {
+  Search,
+  Filter,
+  Grid3x3,
+  List,
+  MapPin,
+  Star,
   Heart,
   ChevronLeft,
   ChevronRight,
   X,
+  Map,
   Frown,
   SlidersHorizontal,
-  ArrowUpDown
+  ArrowUpDown,
+  Shield
 } from 'lucide-react';
 
 // Category image mapping using Unsplash
@@ -46,8 +49,7 @@ function BrowseServices() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { location: userLocation } = useAppLocation();
-
-    const { t } = useTranslation();
+  const { t } = useTranslation();
   
   // Data states
   const [listings, setListings] = useState([]);
@@ -64,17 +66,8 @@ function BrowseServices() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
- 
-
   const [favorites, setFavorites] = useState(new Set());
 
-// Load user's existing favorites on mount
-useEffect(() => {
-  favoriteApi.getIds()
-    .then(ids => setFavorites(new Set(ids)))
-    .catch(err => console.error('Load favorites error:', err));
-}, []);
-  
   // Filter states (initialize from URL)
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('categoryId') || '');
@@ -90,7 +83,7 @@ useEffect(() => {
       .catch(err => console.error('Categories error:', err));
   }, []);
 
-    // Load user's existing favorites
+  // Load user's existing favorites
   useEffect(() => {
     favoriteApi.getIds()
       .then(ids => setFavorites(new Set(ids)))
@@ -116,7 +109,7 @@ useEffect(() => {
       
       let data = response.data || [];
       
-      // Client-side sorting (backend orders by newest by default)
+      // Client-side sorting
       if (sortBy === 'priceLow') {
         data = [...data].sort((a, b) => a.price - b.price);
       } else if (sortBy === 'priceHigh') {
@@ -144,9 +137,6 @@ useEffect(() => {
     fetchListings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchListings]);
-
-
-
 
   // Update URL when filters change
   useEffect(() => {
@@ -190,17 +180,21 @@ useEffect(() => {
   const toggleFavorite = async (id, e) => {
     e.stopPropagation();
     const isFav = favorites.has(id);
+    
+    // Optimistic UI update
     setFavorites(prev => {
       const next = new Set(prev);
       if (isFav) next.delete(id);
       else next.add(id);
       return next;
     });
+
     try {
       if (isFav) await favoriteApi.remove(id);
       else await favoriteApi.add(id);
     } catch (err) {
       console.error('Toggle favorite error:', err);
+      // Rollback on error
       setFavorites(prev => {
         const next = new Set(prev);
         if (isFav) next.add(id);
@@ -210,8 +204,6 @@ useEffect(() => {
     }
   };
 
-  
-
   const hasActiveFilters = searchInput || selectedCategory || minPrice || maxPrice || sortBy !== 'newest';
 
   return (
@@ -220,7 +212,7 @@ useEffect(() => {
       {/* ===== PAGE HEADER ===== */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-                   <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('browse.browseServices')}</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('browse.browseServices')}</h1>
           <p className="text-slate-500 mt-1">
             {loading ? t('browse.loading') : `${pagination.totalCount} ${t('browse.servicesAvailable')} ${userLocation?.city || 'India'}`}
           </p>
@@ -228,22 +220,33 @@ useEffect(() => {
         
         {/* View Toggle */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1">
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
             <button
               onClick={() => setViewMode('grid')}
               className={`p-2 rounded-lg transition-all ${
-                viewMode === 'grid' ? 'bg-violet-100 text-violet-600' : 'text-slate-400 hover:text-slate-600'
+                viewMode === 'grid' ? 'bg-violet-100 text-violet-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
+              title="Grid View"
             >
               <Grid3x3 className="w-5 h-5" />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`p-2 rounded-lg transition-all ${
-                viewMode === 'list' ? 'bg-violet-100 text-violet-600' : 'text-slate-400 hover:text-slate-600'
+                viewMode === 'list' ? 'bg-violet-100 text-violet-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
+              title="List View"
             >
               <List className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === 'map' ? 'bg-violet-100 text-violet-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+              }`}
+              title="Map View"
+            >
+              <Map className="w-5 h-5" />
             </button>
           </div>
           
@@ -262,7 +265,7 @@ useEffect(() => {
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
-           placeholder={t('browse.searchPlaceholder')}
+          placeholder={t('browse.searchPlaceholder')}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           className="w-full pl-12 pr-32 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all text-slate-700 placeholder-slate-400"
@@ -271,7 +274,7 @@ useEffect(() => {
           type="submit"
           className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg transition-all"
         >
-              {t('browse.search')}
+          {t('browse.search')}
         </button>
       </form>
 
@@ -311,7 +314,8 @@ useEffect(() => {
 
           {/* Price Range Filter */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
- <h3 className="font-semibold text-slate-900 mb-4">{t('browse.priceRange')} (₹)</h3>            <div className="space-y-3">
+            <h3 className="font-semibold text-slate-900 mb-4">{t('browse.priceRange')} (₹)</h3>            
+            <div className="space-y-3">
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">{t('browse.minPrice')}</label>
                 <input
@@ -339,7 +343,6 @@ useEffect(() => {
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
             <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <ArrowUpDown className="w-4 h-4" />
-                 <ArrowUpDown className="w-4 h-4" />
               {t('browse.sortBy')}
             </h3>
             <select
@@ -359,12 +362,12 @@ useEffect(() => {
               onClick={handleClearFilters}
               className="w-full px-4 py-2.5 text-violet-600 hover:bg-violet-50 border border-violet-200 rounded-xl text-sm font-medium transition-all"
             >
-                {t('browse.clearFilters')}
+              {t('browse.clearFilters')}
             </button>
           )}
         </aside>
 
-        {/* ===== LISTINGS GRID/LIST ===== */}
+        {/* ===== LISTINGS GRID/LIST/MAP ===== */}
         <div>
           
           {/* Active Filter Chips */}
@@ -399,7 +402,7 @@ useEffect(() => {
 
           {/* Loading State */}
           {loading ? (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-4'}>
+            <div className={viewMode === 'grid' || viewMode === 'map' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-4'}>
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-slate-100 overflow-hidden animate-pulse">
                   <div className="h-48 bg-slate-200"></div>
@@ -415,19 +418,22 @@ useEffect(() => {
             // Empty State
             <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
               <Frown className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                           <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('browse.noServicesFound')}</h3>
+              <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('browse.noServicesFound')}</h3>
               <p className="text-slate-500 mb-6">{t('browse.tryAdjusting')}</p>
               {hasActiveFilters && (
                 <button
                   onClick={handleClearFilters}
                   className="px-6 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg"
                 >
-                  Clear Filters
+                  {t('browse.clearFilters')}
                 </button>
               )}
             </div>
+          ) : viewMode === 'map' ? (
+            // MAP VIEW
+            <ServiceMap listings={listings} userLocation={userLocation} />
           ) : (
-            // Listings Display
+            // GRID OR LIST VIEW
             <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-4'}>
               {listings.map(listing => (
                 viewMode === 'grid' ? (
@@ -435,9 +441,9 @@ useEffect(() => {
                   <div
                     key={listing.id}
                     onClick={() => navigate(`/dashboard/listing/${listing.id}`)}
-                    className="group bg-white rounded-2xl border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all overflow-hidden cursor-pointer"
+                    className="group bg-white rounded-2xl border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all overflow-hidden cursor-pointer flex flex-col"
                   >
-                    <div className="relative h-48 overflow-hidden">
+                    <div className="relative h-48 overflow-hidden flex-shrink-0">
                       <img
                         src={getListingImage(listing)}
                         alt={listing.title}
@@ -449,31 +455,34 @@ useEffect(() => {
                       >
                         <Heart className={`w-4 h-4 ${favorites.has(listing.id) ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
                       </button>
-                      <span className="absolute bottom-3 left-3 px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-semibold text-violet-700 rounded-full">
+                      <span className="absolute bottom-3 left-3 px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-semibold text-violet-700 rounded-full shadow-md">
                         {listing.categoryName}
                       </span>
                     </div>
-                    <div className="p-4">
+                    <div className="p-4 flex flex-col flex-1">
                       <h3 className="font-bold text-slate-900 line-clamp-1 group-hover:text-violet-600 transition-colors mb-1">
                         {listing.title}
                       </h3>
-                       <p className="text-xs text-slate-500 mb-2">{t('browse.by')} {listing.providerName}</p>
-                                            <div className="flex items-center gap-2 mb-3 text-xs text-slate-500">
+                      <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
+                        {t('browse.by')} <span className="font-medium text-slate-700 truncate">{listing.providerName}</span>
+                        {listing.providerKycStatus === 'verified' && <Shield className="w-3 h-3 text-blue-500 fill-blue-500 flex-shrink-0" />}
+                      </div>
+                      <div className="flex items-center gap-2 mb-3 text-xs text-slate-500">
                         <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                         <span className="font-semibold text-slate-700">
-                             {listing.averageRating > 0 ? listing.averageRating.toFixed(1) : t('browse.new')}
+                          {listing.averageRating > 0 ? listing.averageRating.toFixed(1) : t('browse.new')}
                         </span>
                         {listing.reviewCount > 0 && (
                           <span className="text-slate-400">({listing.reviewCount})</span>
                         )}
                         <span>•</span>
                         <MapPin className="w-3 h-3" />
-                        {listing.location}
+                        <span className="truncate">{listing.location}</span>
                       </div>
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-auto">
                         <span className="text-lg font-bold text-slate-900">₹{listing.price}</span>
-                        <button className="px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-xs font-semibold rounded-lg hover:shadow-lg">
-                              {t('browse.viewDetails')}
+                        <button className="px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-xs font-semibold rounded-lg hover:shadow-lg transition-all">
+                          {t('browse.viewDetails')}
                         </button>
                       </div>
                     </div>
@@ -485,37 +494,40 @@ useEffect(() => {
                     onClick={() => navigate(`/dashboard/listing/${listing.id}`)}
                     className="group bg-white rounded-2xl border border-slate-100 hover:shadow-xl transition-all overflow-hidden cursor-pointer flex flex-col sm:flex-row"
                   >
-                    <div className="relative h-48 sm:h-auto sm:w-64 overflow-hidden flex-shrink-0">
+                    <div className="relative h-48 sm:h-auto sm:w-72 overflow-hidden flex-shrink-0">
                       <img
                         src={getListingImage(listing)}
                         alt={listing.title}
                         className="w-full h-full object-cover"
                       />
-                      <span className="absolute top-3 left-3 px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-semibold text-violet-700 rounded-full">
+                      <span className="absolute top-3 left-3 px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-semibold text-violet-700 rounded-full shadow-md">
                         {listing.categoryName}
                       </span>
                     </div>
                     <div className="flex-1 p-5 flex flex-col">
                       <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-bold text-lg text-slate-900 group-hover:text-violet-600 transition-colors">
+                        <div className="min-w-0 pr-4">
+                          <h3 className="font-bold text-lg text-slate-900 group-hover:text-violet-600 transition-colors truncate">
                             {listing.title}
                           </h3>
-                          <p className="text-sm text-slate-500 mt-1">{t('browse.by')} {listing.providerName}</p>
+                          <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
+                            {t('browse.by')} <span className="font-medium text-slate-700">{listing.providerName}</span>
+                            {listing.providerKycStatus === 'verified' && <Shield className="w-3.5 h-3.5 text-blue-500 fill-blue-500" />}
+                          </div>
                         </div>
                         <button
                           onClick={(e) => toggleFavorite(listing.id, e)}
-                          className="p-2 hover:bg-slate-50 rounded-full"
+                          className="p-2 hover:bg-slate-50 rounded-full flex-shrink-0"
                         >
                           <Heart className={`w-5 h-5 ${favorites.has(listing.id) ? 'fill-red-500 text-red-500' : 'text-slate-400'}`} />
                         </button>
                       </div>
                       <p className="text-sm text-slate-600 line-clamp-2 mb-3">{listing.description}</p>
-                                            <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
                         <div className="flex items-center gap-1">
                           <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                           <span className="font-semibold text-slate-700">
-                              {listing.averageRating > 0 ? listing.averageRating.toFixed(1) : t('browse.new')}
+                            {listing.averageRating > 0 ? listing.averageRating.toFixed(1) : t('browse.new')}
                           </span>
                           {listing.reviewCount > 0 && (
                             <span className="text-slate-400">({listing.reviewCount})</span>
@@ -529,8 +541,8 @@ useEffect(() => {
                       </div>
                       <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
                         <span className="text-2xl font-bold text-slate-900">₹{listing.price}</span>
-                        <button className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg">
-                              {t('browse.viewDetails')}
+                        <button className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all">
+                          {t('browse.viewDetails')}
                         </button>
                       </div>
                     </div>

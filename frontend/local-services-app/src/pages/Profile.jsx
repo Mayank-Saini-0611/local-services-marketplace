@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
 import { listingApi } from '../api/listingApi';
-import { useTranslation } from 'react-i18next';
 import { tokenStorage } from '../utils/tokenStorage';
+import { useTranslation } from 'react-i18next';
 import { 
   User,
   Mail,
@@ -26,15 +26,16 @@ import {
 
 function Profile() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const user = tokenStorage.getUser();
-    const { t } = useTranslation();
 
   const [profile, setProfile] = useState({
     fullName: user?.fullName || '',
     email: user?.email || '',
     phone: '',
     role: user?.role || '',
-    createdAt: null
+    createdAt: null,
+    avatarUrl: null
   });
 
   const [editMode, setEditMode] = useState(false);
@@ -55,7 +56,6 @@ function Profile() {
 
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
-    const [avatarUrl, setAvatarUrl] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
@@ -70,7 +70,8 @@ function Profile() {
         email: data.email,
         phone: data.phone || '',
         role: data.role,
-        createdAt: data.createdAt
+        createdAt: data.createdAt,
+        avatarUrl: data.avatarUrl || null
       });
       setEditData({ fullName: data.fullName, phone: data.phone || '' });
     } catch (err) {
@@ -81,27 +82,40 @@ function Profile() {
     }
   };
 
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
-    const handleAvatarUpload = async (e) => {
+  const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadingAvatar(true);
     try {
+      // 1. Upload to Cloudinary
       const result = await listingApi.uploadImage(file);
-      setAvatarUrl(result.url);
-      showToast('Profile photo updated!');
+      
+      // 2. Persist to Database immediately
+      await authApi.updateProfile({
+        fullName: profile.fullName,
+        phone: profile.phone,
+        avatarUrl: result.url
+      });
+
+      // 3. Update State & LocalStorage
+      setProfile(prev => ({ ...prev, avatarUrl: result.url }));
+      const updatedUser = { ...user, avatarUrl: result.url };
+      tokenStorage.setAuth(tokenStorage.getToken(), updatedUser);
+
+      showToast('Profile photo updated successfully!');
     } catch (err) {
       console.error('Avatar upload error:', err);
-      showToast('Failed to upload photo', 'error');
+      showToast(err.response?.data?.message || 'Failed to upload photo', 'error');
     } finally {
       setUploadingAvatar(false);
+      e.target.value = '';
     }
-  };
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
   };
 
   const handleEditSave = async () => {
@@ -119,19 +133,19 @@ function Profile() {
 
     setIsSaving(true);
     try {
-      const result = await authApi.updateProfile(editData);
+      const result = await authApi.updateProfile({
+        fullName: editData.fullName,
+        phone: editData.phone,
+        avatarUrl: profile.avatarUrl
+      });
       
-      // Update localStorage
-      const updatedUser = { ...user, fullName: result.fullName };
+      const updatedUser = { ...user, fullName: result.fullName, avatarUrl: result.avatarUrl };
       tokenStorage.setAuth(tokenStorage.getToken(), updatedUser);
       
-      setProfile({ ...profile, fullName: result.fullName, phone: result.phone });
+      setProfile(prev => ({ ...prev, fullName: result.fullName, phone: result.phone }));
       setEditMode(false);
       setEditErrors({});
-      showToast('Profile updated successfully!');
-      
-      // Refresh to update sidebar name
-      setTimeout(() => window.location.reload(), 1000);
+      showToast(t('profile.profileUpdated'));
     } catch (err) {
       console.error('Update error:', err);
       showToast(err.response?.data?.message || 'Update failed', 'error');
@@ -159,7 +173,7 @@ function Profile() {
     setIsChangingPassword(true);
     try {
       await authApi.changePassword(passwordData.currentPassword, passwordData.newPassword);
-      showToast('Password changed successfully!');
+      showToast(t('profile.passwordChanged'));
       setShowPasswordModal(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setPasswordErrors({});
@@ -175,9 +189,9 @@ function Profile() {
 
   const getRoleBadge = () => {
     const config = {
-      admin: { bg: 'bg-orange-500', label: 'Administrator', icon: Crown },
-      provider: { bg: 'bg-blue-500', label: 'Service Provider', icon: Briefcase },
-      customer: { bg: 'bg-violet-500', label: 'Customer', icon: User }
+      admin: { bg: 'bg-orange-500', label: t('profile.administrator'), icon: Crown },
+      provider: { bg: 'bg-blue-500', label: t('profile.serviceProvider'), icon: Briefcase },
+      customer: { bg: 'bg-violet-500', label: t('auth.customer'), icon: User }
     };
     return config[profile.role] || config.customer;
   };
@@ -195,7 +209,6 @@ function Profile() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-
       {/* TOAST */}
       {toast && (
         <div className={`fixed top-20 right-4 z-50 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 ${
@@ -210,59 +223,55 @@ function Profile() {
 
       {/* HEADER */}
       <div>
-                <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('profile.myProfile')}</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('profile.myProfile')}</h1>
         <p className="text-slate-500 mt-1">{t('profile.manageInfo')}</p>
       </div>
 
       {/* PROFILE CARD */}
-            {/* PROFILE CARD */}
-      <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden">
-        
-        {/* Thin Gradient Top Strip */}
-                {/* Gradient Top Strip */}
-        <div className="h-20 bg-gradient-to-r from-violet-500 via-purple-600 to-indigo-700"></div>
+      <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm">
+        {/* Gradient Top Banner */}
+        <div className="h-24 bg-gradient-to-r from-violet-500 via-purple-600 to-indigo-700"></div>
 
-        {/* Avatar + Info */}
+        {/* Avatar + Info Section */}
         <div className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-6 mb-6">
             <div className="relative">
-                            <div className="w-32 h-32 rounded-2xl shadow-2xl ring-4 ring-white overflow-hidden">
+              <div className="w-28 h-28 rounded-2xl shadow-xl ring-4 ring-white bg-slate-100 overflow-hidden flex items-center justify-center flex-shrink-0">
                 {uploadingAvatar ? (
-                  <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                  <div className="w-full h-full bg-violet-50 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-violet-600 animate-spin" />
                   </div>
-                ) : avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-5xl font-bold">
-                    {profile.fullName.charAt(0).toUpperCase()}
+                  <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold">
+                    {profile.fullName ? profile.fullName.charAt(0).toUpperCase() : 'U'}
                   </div>
                 )}
               </div>
-                            <label className="absolute bottom-2 right-2 w-9 h-9 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer">
-                <Camera className="w-4 h-4 text-slate-600" />
+              <label className="absolute -bottom-2 -right-2 w-9 h-9 bg-white hover:bg-slate-50 rounded-full shadow-lg border border-slate-200 flex items-center justify-center cursor-pointer transition-transform hover:scale-105">
+                <Camera className="w-4 h-4 text-slate-700" />
                 <input
                   type="file"
                   accept="image/jpeg,image/jpg,image/png,image/webp"
                   className="hidden"
                   onChange={handleAvatarUpload}
+                  disabled={uploadingAvatar}
                 />
               </label>
             </div>
 
-                        <div className="flex-1 mt-2 sm:mt-0 sm:pb-2">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-2xl font-bold text-slate-900">{profile.fullName}</h2>
-              </div>
-              <p className="text-slate-500 text-sm">{profile.email}</p>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 ${roleBadge.bg} text-white text-xs font-semibold rounded-full shadow-md`}>
-                  <RoleIcon className="w-3 h-3" />
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-slate-900">{profile.fullName}</h2>
+              <p className="text-slate-500 text-sm mt-0.5">{profile.email}</p>
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 ${roleBadge.bg} text-white text-xs font-semibold rounded-full shadow-sm`}>
+                  <RoleIcon className="w-3.5 h-3.5" />
                   {roleBadge.label}
                 </span>
                 {profile.createdAt && (
-                  <span className="text-xs text-slate-500">
-                    Member since {new Date(profile.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                  <span className="text-xs text-slate-400">
+                    {t('profile.memberSince')} {new Date(profile.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
                   </span>
                 )}
               </div>
@@ -271,20 +280,18 @@ function Profile() {
             {!editMode && (
               <button
                 onClick={() => setEditMode(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 font-semibold rounded-xl transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 font-semibold rounded-xl transition-colors self-start sm:self-center"
               >
-                       <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-4 h-4" />
                 {t('profile.editProfile')}
               </button>
             )}
           </div>
 
-          {/* PROFILE FIELDS */}
-          <div className="space-y-4">
-            
-            {/* Full Name */}
+          {/* FIELDS */}
+          <div className="space-y-4 pt-4 border-t border-slate-100">
             <div>
-               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.fullName')}</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.fullName')}</label>
               {editMode ? (
                 <div>
                   <div className="relative">
@@ -309,16 +316,15 @@ function Profile() {
               )}
             </div>
 
-            {/* Email (read-only) */}
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.emailAddress')}</label>
               <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
                 <Mail className="w-5 h-5 text-slate-400" />
                 <span className="text-slate-900 font-medium flex-1">{profile.email}</span>
-                <span className="text-xs text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">{t('profile.cannotChange')}</span>              </div>
+                <span className="text-xs text-slate-400 bg-slate-200 px-2.5 py-0.5 rounded-full">{t('profile.cannotChange')}</span>
+              </div>
             </div>
 
-            {/* Phone */}
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.phoneNumber')}</label>
               {editMode ? (
@@ -346,30 +352,21 @@ function Profile() {
                 <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
                   <Phone className="w-5 h-5 text-slate-400" />
                   <span className="text-slate-900 font-medium">
-                     {profile.phone ? `+91 ${profile.phone}` : <span className="text-slate-400 italic">{t('profile.notSet')}</span>}
+                    {profile.phone ? `+91 ${profile.phone}` : <span className="text-slate-400 italic">{t('profile.notSet')}</span>}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Role (read-only) */}
-            <div>
-  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('profile.accountType')}</label>              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                <Shield className="w-5 h-5 text-slate-400" />
-                <span className="text-slate-900 font-medium capitalize">{profile.role}</span>
-              </div>
-            </div>
-
-            {/* EDIT MODE BUTTONS */}
             {editMode && (
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-3">
                 <button
                   onClick={() => {
                     setEditMode(false);
                     setEditData({ fullName: profile.fullName, phone: profile.phone });
                     setEditErrors({});
                   }}
-                                   className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl"
+                  className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl"
                 >
                   {t('common.cancel')}
                 </button>
@@ -387,11 +384,11 @@ function Profile() {
         </div>
       </div>
 
-      {/* SECURITY CARD */}
-      <div className="bg-white rounded-3xl border border-slate-100 p-6">
+      {/* SECURITY */}
+      <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-                        <h3 className="text-lg font-bold text-slate-900">{t('profile.security')}</h3>
+            <h3 className="text-lg font-bold text-slate-900">{t('profile.security')}</h3>
             <p className="text-sm text-slate-500">{t('profile.managePassword')}</p>
           </div>
         </div>
@@ -405,7 +402,7 @@ function Profile() {
               <Lock className="w-5 h-5 text-violet-600" />
             </div>
             <div>
-                 <p className="font-semibold text-slate-900">{t('profile.changePassword')}</p>
+              <p className="font-semibold text-slate-900">{t('profile.changePassword')}</p>
               <p className="text-xs text-slate-500">{t('profile.updatePassword')}</p>
             </div>
           </div>
@@ -413,14 +410,14 @@ function Profile() {
         </button>
       </div>
 
-      {/* CHANGE PASSWORD MODAL */}
+      {/* PASSWORD MODAL */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Change Password</h3>
-                <p className="text-sm text-slate-500 mt-0.5">Enter your current and new password</p>
+                <h3 className="text-xl font-bold text-slate-900">{t('profile.changePassword')}</h3>
+                <p className="text-sm text-slate-500 mt-0.5">{t('profile.updatePassword')}</p>
               </div>
               <button onClick={() => setShowPasswordModal(false)} className="p-2 hover:bg-slate-100 rounded-lg">
                 <X className="w-5 h-5 text-slate-500" />
@@ -428,7 +425,6 @@ function Profile() {
             </div>
 
             <form onSubmit={handleChangePassword} className="p-6 space-y-4">
-              
               {passwordErrors.general && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -437,59 +433,56 @@ function Profile() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Current Password</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">{t('profile.currentPassword')}</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
                     type={showCurrent ? "text" : "password"}
                     value={passwordData.currentPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                    className={`w-full pl-10 pr-10 py-3 bg-white border ${passwordErrors.currentPassword ? 'border-red-400' : 'border-slate-200'} rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100`}
+                    className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
                   />
                   <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                     {showCurrent ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
-                {passwordErrors.currentPassword && <p className="text-xs text-red-600 mt-1">{passwordErrors.currentPassword}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">New Password</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">{t('profile.newPassword')}</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
                     type={showNew ? "text" : "password"}
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    className={`w-full pl-10 pr-10 py-3 bg-white border ${passwordErrors.newPassword ? 'border-red-400' : 'border-slate-200'} rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100`}
+                    className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
                   />
                   <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                     {showNew ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
-                {passwordErrors.newPassword && <p className="text-xs text-red-600 mt-1">{passwordErrors.newPassword}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Confirm New Password</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">{t('auth.confirmPassword')}</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
                     type="password"
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    className={`w-full pl-10 pr-4 py-3 bg-white border ${passwordErrors.confirmPassword ? 'border-red-400' : 'border-slate-200'} rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100`}
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
                   />
                 </div>
-                {passwordErrors.confirmPassword && <p className="text-xs text-red-600 mt-1">{passwordErrors.confirmPassword}</p>}
               </div>
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowPasswordModal(false)} className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl">
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button type="submit" disabled={isChangingPassword} className="flex-1 py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
-                  {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Change Password'}
+                  {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : t('profile.changePassword')}
                 </button>
               </div>
             </form>

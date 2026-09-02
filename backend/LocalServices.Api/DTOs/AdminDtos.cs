@@ -40,6 +40,7 @@
         public DateTime CreatedAt { get; set; }
         public int TotalListings { get; set; }
         public int TotalBookings { get; set; }
+        public string KycStatus { get; set; } = string.Empty;
     }
 
     public class UpdateUserRoleDto

@@ -15,7 +15,8 @@ import {
   Menu,
   X,
   Shield,
-  ArrowLeft
+  ArrowLeft,
+  ShieldCheck
 } from 'lucide-react';
 
 function AdminLayout() {
@@ -57,6 +58,7 @@ const handleNotificationClick = (notification) => {
     { path: '/admin/users', icon: Users, label: 'Users' },
     { path: '/admin/listings', icon: Briefcase, label: 'Listings' },
     { path: '/admin/bookings', icon: Calendar, label: 'Bookings' },
+    { path: '/admin/kyc', icon: ShieldCheck, label: 'KYC Approvals' },
   ];
 
   return (

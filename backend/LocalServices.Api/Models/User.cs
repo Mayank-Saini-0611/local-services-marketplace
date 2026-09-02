@@ -40,8 +40,29 @@ namespace LocalServices.Api.Models
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+
+        [Column("kyc_document_url")]
+        public string? KycDocumentUrl { get; set; }
+
+        [Column("kyc_status")]
+        public string KycStatus { get; set; } = "unverified";
+
+        [Column("kyc_submitted_at")]
+        public DateTime? KycSubmittedAt { get; set; }
+
+
+        [Column("avatar_url")]
+        public string? AvatarUrl { get; set; }
+
         // Navigation properties (relationships)
         public ICollection<Listing> Listings { get; set; } = new List<Listing>();
         public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+
+
+        [Column("email_verified")]
+        public bool EmailVerified { get; set; } = false;
+
+        [Column("email_verification_token")]
+        public string? EmailVerificationToken { get; set; }
     }
 }

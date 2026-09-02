@@ -1,5 +1,6 @@
 ﻿using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
+using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,10 +13,12 @@ namespace LocalServices.Api.Controllers
     public class AdminController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly NotificationService _notificationService;
 
-        public AdminController(AppDbContext context)
+        public AdminController(AppDbContext context, NotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         // ============================================
@@ -376,6 +379,59 @@ namespace LocalServices.Api.Controllers
                 message = $"Listing {(listing.IsActive ? "activated" : "deactivated")}.",
                 isActive = listing.IsActive
             });
+        }
+
+
+
+
+
+
+        // ============================================
+        // GET: api/admin/kyc-requests
+        // ============================================
+        [HttpGet("kyc-requests")]
+        public async Task<IActionResult> GetKycRequests()
+        {
+            var requests = await _context.Users
+                .Where(u => u.Role == "provider" && u.KycStatus != "unverified")
+                .OrderByDescending(u => u.KycSubmittedAt)
+                .Select(u => new
+                {
+                    UserId = u.Id,
+                    FullName = u.FullName,
+                    Email = u.Email,
+                    DocumentUrl = u.KycDocumentUrl,
+                    Status = u.KycStatus,
+                    SubmittedAt = u.KycSubmittedAt
+                })
+                .ToListAsync();
+
+            return Ok(requests);
+        }
+
+        // ============================================
+        // PUT: api/admin/kyc-requests/{id}/status
+        // ============================================
+        [HttpPut("kyc-requests/{id}/status")]
+        public async Task<IActionResult> UpdateKycStatus(int id, [FromBody] UpdateKycStatusDto dto)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id && u.Role == "provider");
+            if (user == null) return NotFound(new { message = "Provider not found." });
+
+            user.KycStatus = dto.Status;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            // Notify Provider
+            await _notificationService.SendNotificationAsync(
+                userId: user.Id,
+                type: $"kyc_{dto.Status}",
+                title: dto.Status == "verified" ? "KYC Approved! 🛡️" : "KYC Rejected ❌",
+                message: dto.Status == "verified" ? "Your account is now verified." : "Please re-submit your ID document.",
+                link: "/dashboard/settings"
+            );
+
+            return Ok(new { message = $"Provider KYC marked as {dto.Status}." });
         }
     }
 }
