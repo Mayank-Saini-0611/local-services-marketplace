@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LocalServices.Api.Models
@@ -39,6 +39,21 @@ namespace LocalServices.Api.Models
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        [Required]
+        [MaxLength(20)]
+        [Column("moderation_status")]
+        public string ModerationStatus { get; set; } = "published";
+
+        [MaxLength(500)]
+        [Column("moderation_note")]
+        public string? ModerationNote { get; set; }
+
+        [Column("moderated_at")]
+        public DateTime? ModeratedAt { get; set; }
+
+        [Column("moderated_by_id")]
+        public int? ModeratedById { get; set; }
 
         // Navigation
         [ForeignKey("BookingId")]

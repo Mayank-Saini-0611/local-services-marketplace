@@ -1,17 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../api/adminApi';
 import { 
   Users,
   Briefcase,
   Calendar,
   TrendingUp,
-  UserCheck,
   UserPlus,
   IndianRupee,
   Clock,
   CheckCircle2,
   XCircle,
-  PauseCircle,
   Loader2,
   Activity,
   PackageCheck
@@ -52,11 +50,7 @@ function AdminDashboard() {
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [statsData, growthData, activityData] = await Promise.all([
@@ -72,7 +66,15 @@ function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchData();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchData]);
 
   if (loading) {
     return (

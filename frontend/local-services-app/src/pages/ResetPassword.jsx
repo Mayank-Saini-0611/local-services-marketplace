@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import LottiePlayer from '../components/LottiePlayer';
 import authAnimation from '../assets/auth-animation.json';
@@ -29,13 +29,8 @@ function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [tokenValid, setTokenValid] = useState(true);
-
-  useEffect(() => {
-    if (!token) {
-      setTokenValid(false);
-    }
-  }, [token]);
+  const [serverRejectedToken, setServerRejectedToken] = useState(false);
+  const tokenValid = Boolean(token) && !serverRejectedToken;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -83,7 +78,7 @@ function ResetPassword() {
       
       // If token invalid, show appropriate state
       if (errorMsg.toLowerCase().includes('invalid') || errorMsg.toLowerCase().includes('expired')) {
-        setTokenValid(false);
+        setServerRejectedToken(true);
       }
     } finally {
       setIsSubmitting(false);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/adminApi';
 import { 
@@ -10,11 +10,9 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  X,
   Eye,
   PauseCircle,
   PlayCircle,
-  Filter,
   Tag,
   User
 } from 'lucide-react';
@@ -28,18 +26,24 @@ function AdminListings() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [toast, setToast] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const searchRef = useRef(search);
 
   useEffect(() => {
-    fetchListings();
-  }, [statusFilter]);
+    searchRef.current = search;
+  }, [search]);
 
-  const fetchListings = async () => {
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const fetchListings = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
       if (statusFilter !== 'all') params.status = statusFilter;
-      if (search.trim()) params.search = search.trim();
-      
+      if (searchRef.current.trim()) params.search = searchRef.current.trim();
+
       const data = await adminApi.getAllListings(params);
       setListings(data);
     } catch (err) {
@@ -48,12 +52,15 @@ function AdminListings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, showToast]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchListings();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchListings]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();

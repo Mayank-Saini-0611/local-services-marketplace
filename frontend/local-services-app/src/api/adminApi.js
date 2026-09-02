@@ -67,4 +67,29 @@ export const adminApi = {
     const response = await axiosClient.put(`/admin/kyc-requests/${id}/status`, { status });
     return response.data;
   },
+
+  updateProviderVerification: async (id, verification) => {
+    const response = await axiosClient.put(`/admin/users/${id}/verification`, verification);
+    return response.data;
+  },
+
+  getReviews: async (status = 'all') => {
+    const response = await axiosClient.get('/admin/reviews', { params: { status } });
+    return response.data;
+  },
+
+  moderateReview: async (id, status, note = '') => {
+    const response = await axiosClient.put(`/admin/reviews/${id}/moderation`, { status, note });
+    return response.data;
+  },
+
+  getReports: async (status = 'all') => {
+    const response = await axiosClient.get('/admin/reports', { params: { status } });
+    return response.data;
+  },
+
+  updateReportStatus: async (id, status) => {
+    const response = await axiosClient.put(`/admin/reports/${id}/status`, { status });
+    return response.data;
+  },
 };

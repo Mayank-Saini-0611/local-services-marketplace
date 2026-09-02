@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/adminApi';
 import { 
   Calendar,
   Clock,
   MapPin,
-  User,
   Mail,
   Phone,
   CheckCircle2,
@@ -15,7 +14,6 @@ import {
   Tag,
   IndianRupee,
   Inbox,
-  PauseCircle,
   PackageCheck
 } from 'lucide-react';
 
@@ -26,16 +24,12 @@ function AdminBookings() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    fetchBookings();
-  }, [statusFilter]);
-
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
       if (statusFilter !== 'all') params.status = statusFilter;
-      
+
       const data = await adminApi.getAllBookings(params);
       setBookings(data);
     } catch (err) {
@@ -43,7 +37,15 @@ function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchBookings();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchBookings]);
 
   const getStatusBadge = (status) => {
     const config = {

@@ -5,7 +5,8 @@ import { categoryApi } from '../api/categoryApi';
 import { favoriteApi } from '../api/favoriteApi';
 import { useTranslation } from 'react-i18next';
 import { useLocation as useAppLocation } from '../context/LocationContext';
-import ServiceMap from '../components/ServiceMap'; 
+import ServiceMap from '../components/ServiceMap';
+import VerificationBadges from '../components/VerificationBadges';
 import {
   Search,
   Filter,
@@ -20,8 +21,7 @@ import {
   Map,
   Frown,
   SlidersHorizontal,
-  ArrowUpDown,
-  Shield
+  ArrowUpDown
 } from 'lucide-react';
 
 // Category image mapping using Unsplash
@@ -134,8 +134,11 @@ function BrowseServices() {
 
   // Fetch listings whenever filters change
   useEffect(() => {
-    fetchListings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const refreshTimer = window.setTimeout(() => {
+      void fetchListings();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
   }, [fetchListings]);
 
   // Update URL when filters change
@@ -465,8 +468,13 @@ function BrowseServices() {
                       </h3>
                       <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
                         {t('browse.by')} <span className="font-medium text-slate-700 truncate">{listing.providerName}</span>
-                        {listing.providerKycStatus === 'verified' && <Shield className="w-3 h-3 text-blue-500 fill-blue-500 flex-shrink-0" />}
                       </div>
+                      <VerificationBadges
+                        verification={listing.providerVerification}
+                        legacyKycStatus={listing.providerKycStatus}
+                        compact
+                        className="mb-2"
+                      />
                       <div className="flex items-center gap-2 mb-3 text-xs text-slate-500">
                         <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                         <span className="font-semibold text-slate-700">
@@ -512,8 +520,13 @@ function BrowseServices() {
                           </h3>
                           <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
                             {t('browse.by')} <span className="font-medium text-slate-700">{listing.providerName}</span>
-                            {listing.providerKycStatus === 'verified' && <Shield className="w-3.5 h-3.5 text-blue-500 fill-blue-500" />}
                           </div>
+                          <VerificationBadges
+                            verification={listing.providerVerification}
+                            legacyKycStatus={listing.providerKycStatus}
+                            compact
+                            className="mt-2"
+                          />
                         </div>
                         <button
                           onClick={(e) => toggleFavorite(listing.id, e)}

@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import { authApi } from '../api/authApi';
 import { listingApi } from '../api/listingApi';
 import { tokenStorage } from '../utils/tokenStorage';
@@ -8,8 +7,6 @@ import {
   User,
   Mail,
   Phone,
-  Calendar,
-  Shield,
   Briefcase,
   Crown,
   Edit2,
@@ -25,7 +22,6 @@ import {
 } from 'lucide-react';
 
 function Profile() {
-  const navigate = useNavigate();
   const { t } = useTranslation();
   const user = tokenStorage.getUser();
 
@@ -58,11 +54,12 @@ function Profile() {
   const [loading, setLoading] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       const data = await authApi.getCurrentUser();
       setProfile({
@@ -80,12 +77,15 @@ function Profile() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchProfile();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchProfile]);
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];

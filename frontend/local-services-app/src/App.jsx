@@ -21,6 +21,8 @@ import AdminUsers from './pages/AdminUsers.jsx';
 import AdminListings from './pages/AdminListings.jsx';
 import AdminBookings from './pages/AdminBookings.jsx';
 import AdminKyc from './pages/AdminKyc.jsx';
+import AdminReviews from './pages/AdminReviews.jsx';
+import AdminReports from './pages/AdminReports.jsx';
 import NotificationToast from './components/NotificationToast.jsx';
 import ChatToast from './components/ChatToast.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
@@ -64,6 +66,8 @@ function App() {
           <Route path="listings" element={<AdminListings />} />
           <Route path="bookings" element={<AdminBookings />} />
           <Route path="kyc" element={<AdminKyc />} />
+          <Route path="reviews" element={<AdminReviews />} />
+          <Route path="reports" element={<AdminReports />} />
         </Route>
 
         {/* 404 fallback */}

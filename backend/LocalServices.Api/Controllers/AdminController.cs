@@ -1,9 +1,10 @@
-﻿using LocalServices.Api.Data;
+using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
 using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace LocalServices.Api.Controllers
 {
@@ -14,11 +15,16 @@ namespace LocalServices.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly NotificationService _notificationService;
+        private readonly ProviderTrustService _providerTrustService;
 
-        public AdminController(AppDbContext context, NotificationService notificationService)
+        public AdminController(
+            AppDbContext context,
+            NotificationService notificationService,
+            ProviderTrustService providerTrustService)
         {
             _context = context;
             _notificationService = notificationService;
+            _providerTrustService = providerTrustService;
         }
 
         // ============================================
@@ -93,7 +99,12 @@ namespace LocalServices.Api.Controllers
                     Role = u.Role,
                     CreatedAt = u.CreatedAt,
                     TotalListings = u.Listings.Count,
-                    TotalBookings = u.Bookings.Count
+                    TotalBookings = u.Bookings.Count,
+                    KycStatus = u.KycStatus,
+                    EmailVerified = u.EmailVerified,
+                    PhoneVerified = u.PhoneVerified,
+                    BackgroundChecked = u.BackgroundChecked,
+                    BusinessVerified = u.BusinessVerified
                 })
                 .ToListAsync();
 
@@ -139,11 +150,20 @@ namespace LocalServices.Api.Controllers
                     ProviderId = l.ProviderId,
                     ProviderName = l.Provider!.FullName,
                     ProviderEmail = l.Provider.Email,
+                    ProviderKycStatus = l.Provider.KycStatus,
                     ProviderPhone = l.Provider.Phone,
                     CategoryId = l.CategoryId,
                     CategoryName = l.Category!.Name
                 })
                 .ToListAsync();
+
+            var verificationByProvider = await _providerTrustService.GetForProvidersAsync(
+                listings.Select(listing => listing.ProviderId));
+            foreach (var listing in listings)
+            {
+                if (verificationByProvider.TryGetValue(listing.ProviderId, out var verification))
+                    listing.ProviderVerification = verification;
+            }
 
             return Ok(listings);
         }
@@ -432,6 +452,179 @@ namespace LocalServices.Api.Controllers
             );
 
             return Ok(new { message = $"Provider KYC marked as {dto.Status}." });
+        }
+
+        // ============================================
+        // PUT: api/admin/users/{id}/verification
+        // Admin-controlled checks that require manual evidence.
+        // ============================================
+        [HttpPut("users/{id}/verification")]
+        public async Task<IActionResult> UpdateProviderVerification(
+            int id,
+            [FromBody] AdminUpdateVerificationDto dto)
+        {
+            var provider = await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == id && u.Role == "provider");
+            if (provider == null)
+                return NotFound(new { message = "Provider not found." });
+
+            provider.PhoneVerified = dto.PhoneVerified;
+            provider.BackgroundChecked = dto.BackgroundChecked;
+            provider.BusinessVerified = dto.BusinessVerified;
+            provider.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            await _notificationService.SendNotificationAsync(
+                userId: provider.Id,
+                type: "verification_updated",
+                title: "Trust profile updated",
+                message: "An administrator updated your provider verification checks.",
+                link: "/dashboard/settings");
+
+            return Ok(new
+            {
+                message = "Provider verification updated.",
+                providerId = provider.Id,
+                provider.PhoneVerified,
+                provider.BackgroundChecked,
+                provider.BusinessVerified
+            });
+        }
+
+        // ============================================
+        // GET: api/admin/reviews
+        // ============================================
+        [HttpGet("reviews")]
+        public async Task<IActionResult> GetReviews([FromQuery] string? status)
+        {
+            var query = _context.Reviews.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(status) && status != "all")
+                query = query.Where(r => r.ModerationStatus == status);
+
+            var reviews = await query
+                .Include(r => r.Customer)
+                .Include(r => r.Provider)
+                .Include(r => r.Listing)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new AdminReviewDto
+                {
+                    Id = r.Id,
+                    BookingId = r.BookingId,
+                    ListingId = r.ListingId,
+                    ListingTitle = r.Listing!.Title,
+                    Rating = r.Rating,
+                    Comment = r.Comment,
+                    CustomerId = r.CustomerId,
+                    CustomerName = r.Customer!.FullName,
+                    ProviderId = r.ProviderId,
+                    ProviderName = r.Provider!.FullName,
+                    ModerationStatus = r.ModerationStatus,
+                    ModerationNote = r.ModerationNote,
+                    CreatedAt = r.CreatedAt,
+                    ModeratedAt = r.ModeratedAt
+                })
+                .ToListAsync();
+
+            return Ok(reviews);
+        }
+
+        // ============================================
+        // PUT: api/admin/reviews/{id}/moderation
+        // ============================================
+        [HttpPut("reviews/{id}/moderation")]
+        public async Task<IActionResult> UpdateReviewModeration(
+            int id,
+            [FromBody] ReviewModerationUpdateDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var review = await _context.Reviews.FindAsync(id);
+            if (review == null)
+                return NotFound(new { message = "Review not found." });
+
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
+            review.ModerationStatus = dto.Status;
+            review.ModerationNote = string.IsNullOrWhiteSpace(dto.Note)
+                ? null
+                : sanitizer.Sanitize(dto.Note).Trim();
+            review.ModeratedAt = DateTime.UtcNow;
+            review.ModeratedById = GetCurrentUserId();
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = $"Review {dto.Status}.",
+                reviewId = review.Id,
+                status = review.ModerationStatus
+            });
+        }
+
+        // ============================================
+        // GET: api/admin/reports
+        // ============================================
+        [HttpGet("reports")]
+        public async Task<IActionResult> GetReports([FromQuery] string? status)
+        {
+            var query = _context.UserReports.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(status) && status != "all")
+                query = query.Where(r => r.Status == status);
+
+            var reports = await query
+                .Include(r => r.Reporter)
+                .Include(r => r.ReportedUser)
+                .Include(r => r.Listing)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new UserReportResponseDto
+                {
+                    Id = r.Id,
+                    ReporterId = r.ReporterId,
+                    ReporterName = r.Reporter!.FullName,
+                    ReportedUserId = r.ReportedUserId,
+                    ReportedUserName = r.ReportedUser!.FullName,
+                    ReportedUserRole = r.ReportedUser.Role,
+                    ListingId = r.ListingId,
+                    ListingTitle = r.Listing == null ? null : r.Listing.Title,
+                    Category = r.Category,
+                    Description = r.Description,
+                    Status = r.Status,
+                    CreatedAt = r.CreatedAt,
+                    UpdatedAt = r.UpdatedAt,
+                    ResolvedAt = r.ResolvedAt
+                })
+                .ToListAsync();
+
+            return Ok(reports);
+        }
+
+        // ============================================
+        // PUT: api/admin/reports/{id}/status
+        // ============================================
+        [HttpPut("reports/{id}/status")]
+        public async Task<IActionResult> UpdateReportStatus(
+            int id,
+            [FromBody] UpdateReportStatusDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var report = await _context.UserReports.FindAsync(id);
+            if (report == null)
+                return NotFound(new { message = "Report not found." });
+
+            report.Status = dto.Status;
+            report.UpdatedAt = DateTime.UtcNow;
+            report.ResolvedAt = dto.Status is "resolved" or "rejected" ? DateTime.UtcNow : null;
+            report.ResolvedById = report.ResolvedAt.HasValue ? GetCurrentUserId() : null;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Report {dto.Status}.", reportId = report.Id, status = report.Status });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var claim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            return int.TryParse(claim, out var userId) ? userId : null;
         }
     }
 }

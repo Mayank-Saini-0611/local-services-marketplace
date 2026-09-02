@@ -1,4 +1,4 @@
-﻿using LocalServices.Api.Data;
+using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
 using LocalServices.Api.Models;
 using LocalServices.Api.Services;
@@ -54,6 +54,11 @@ namespace LocalServices.Api.Controllers
             if (alreadyReviewed)
                 return BadRequest(new { message = "You have already reviewed this booking." });
 
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
+            var sanitizedComment = string.IsNullOrWhiteSpace(dto.Comment)
+                ? null
+                : sanitizer.Sanitize(dto.Comment).Trim();
+
             var review = new Review
             {
                 BookingId = dto.BookingId,
@@ -61,7 +66,8 @@ namespace LocalServices.Api.Controllers
                 CustomerId = userId.Value,
                 ProviderId = booking.Listing!.ProviderId,
                 Rating = dto.Rating,
-                Comment = dto.Comment?.Trim(),
+                Comment = sanitizedComment,
+                ModerationStatus = "published",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -96,7 +102,7 @@ namespace LocalServices.Api.Controllers
                 .Include(r => r.Customer)
                 .Include(r => r.Provider)
                 .Include(r => r.Listing)
-                .Where(r => r.ListingId == listingId)
+                .Where(r => r.ListingId == listingId && r.ModerationStatus == "published")
                 .OrderByDescending(r => r.CreatedAt)
                 .Select(r => new ReviewResponseDto
                 {
@@ -126,7 +132,7 @@ namespace LocalServices.Api.Controllers
         public async Task<IActionResult> GetListingStats(int listingId)
         {
             var reviews = await _context.Reviews
-                .Where(r => r.ListingId == listingId)
+                .Where(r => r.ListingId == listingId && r.ModerationStatus == "published")
                 .ToListAsync();
 
             var stats = new ListingRatingStatsDto
@@ -198,8 +204,11 @@ namespace LocalServices.Api.Controllers
 
             if (review.CustomerId != userId.Value) return Forbid();
 
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
             review.Rating = dto.Rating;
-            review.Comment = dto.Comment?.Trim();
+            review.Comment = string.IsNullOrWhiteSpace(dto.Comment)
+                ? null
+                : sanitizer.Sanitize(dto.Comment).Trim();
             review.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

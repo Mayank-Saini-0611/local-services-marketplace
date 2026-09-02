@@ -1,4 +1,4 @@
-﻿using LocalServices.Api.Data;
+using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
 using LocalServices.Api.Models;
 using LocalServices.Api.Services;
@@ -57,6 +57,12 @@ namespace LocalServices.Api.Controllers
             if (!listing.IsActive)
                 return BadRequest(new { message = "This listing is not currently accepting bookings." });
 
+            var isBlocked = await _context.UserBlocks.AnyAsync(b =>
+                (b.BlockerId == customerId.Value && b.BlockedUserId == listing.ProviderId) ||
+                (b.BlockerId == listing.ProviderId && b.BlockedUserId == customerId.Value));
+            if (isBlocked)
+                return BadRequest(new { message = "Bookings with this user are unavailable." });
+
             // Can't book your own listing
             if (listing.ProviderId == customerId.Value)
                 return BadRequest(new { message = "You cannot book your own listing." });
@@ -67,6 +73,8 @@ namespace LocalServices.Api.Controllers
                 return Unauthorized(new { message = "Customer not found." });
             var sanitizer = new Ganss.Xss.HtmlSanitizer();
             dto.Message = sanitizer.Sanitize(dto.Message);
+            if (string.IsNullOrWhiteSpace(dto.Message))
+                return BadRequest(new { message = "Message cannot be empty." });
 
             // Create booking
             var newBooking = new Booking

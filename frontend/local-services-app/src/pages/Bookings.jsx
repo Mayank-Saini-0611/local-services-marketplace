@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingApi } from '../api/bookingApi';
 import { reviewApi } from '../api/reviewApi';
@@ -6,27 +6,25 @@ import { useTranslation } from 'react-i18next';
 import { tokenStorage } from '../utils/tokenStorage';
 import { paymentApi } from '../api/paymentApi';
 import { couponApi } from '../api/couponApi';
+import SafetyReportModal from '../components/SafetyReportModal';
 import { 
   Calendar,
   Clock,
   MapPin,
-  User,
   Mail,
   Phone,
   CheckCircle2,
   XCircle,
   Loader2,
-  Frown,
   Eye,
   Trash2,
   AlertCircle,
-  X,
-  Filter,
   Inbox,
   Send as SendIcon,
   Star,
   FileDown,
-  CreditCard
+  CreditCard,
+  Flag
 } from 'lucide-react';
 function Bookings() {
   const navigate = useNavigate();
@@ -39,11 +37,11 @@ function Bookings() {
   const [view, setView] = useState(user?.role === 'provider' ? 'received' : 'my');
   const [toast, setToast] = useState(null);
   const [cancelConfirm, setCancelConfirm] = useState(null);
-  const [statusUpdate, setStatusUpdate] = useState(null);
   const [reviewModal, setReviewModal] = useState(null);
 const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
 const [reviewErrors, setReviewErrors] = useState({});
 const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reportCustomer, setReportCustomer] = useState(null);
 
 
 
@@ -54,6 +52,11 @@ const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(null);
   const [couponError, setCouponError] = useState('');
   const [applyingCoupon, setApplyingCoupon] = useState(false);
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const handlePayOnline = async (booking, e) => {
     e.stopPropagation();
@@ -156,14 +159,10 @@ const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     }
   };
 
-  useEffect(() => {
-    fetchBookings();
-  }, [view]);
-
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     setLoading(true);
     try {
-      const data = view === 'received' 
+      const data = view === 'received'
         ? await bookingApi.getReceivedBookings()
         : await bookingApi.getMyBookings();
       setBookings(data);
@@ -173,12 +172,15 @@ const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     } finally {
       setLoading(false);
     }
-  };
+  }, [view, showToast]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchBookings();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchBookings]);
 
   const handleCancel = async () => {
     if (!cancelConfirm) return;
@@ -197,7 +199,6 @@ const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     try {
       await bookingApi.updateStatus(bookingId, newStatus);
       showToast(`Booking ${newStatus} successfully! Customer notified via email.`);
-      setStatusUpdate(null);
       fetchBookings();
     } catch (err) {
       console.error('Status update error:', err);
@@ -467,6 +468,19 @@ const [isSubmittingReview, setIsSubmittingReview] = useState(false);
                       <Eye className="w-4 h-4" />
                       View Service
                     </button>
+                    {!isMyBookings && (
+                      <button
+                        type="button"
+                        onClick={() => setReportCustomer({
+                          id: booking.customerId,
+                          name: booking.customerName,
+                        })}
+                        className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors"
+                      >
+                        <Flag className="w-4 h-4" />
+                        Report Customer
+                      </button>
+                    )}
                                         {/* Invoice Download Button (Available for Completed Bookings) */}
                     {booking.status === 'completed' && (
                       <button
@@ -728,12 +742,19 @@ const [isSubmittingReview, setIsSubmittingReview] = useState(false);
           </div>
         </div>
       )}
+
+      {reportCustomer && (
+        <SafetyReportModal
+          reportedUserId={reportCustomer.id}
+          reportedUserName={reportCustomer.name}
+          onClose={() => setReportCustomer(null)}
+          onComplete={(message) => {
+            setReportCustomer(null);
+            showToast(message);
+          }}
+        />
+      )}
     </div>
-
-
-    
-    
-    
 
   );
 }

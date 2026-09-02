@@ -67,6 +67,7 @@ builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<CloudinaryService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<ProviderTrustService>();
 
 // 5. SignalR
 builder.Services.AddSignalR();
