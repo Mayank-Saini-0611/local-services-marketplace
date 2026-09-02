@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   NATIVE COLOUR SCHEME
+   ------------------------------------------------------------
+   Makes the browser's OWN widgets follow the app theme:
+   scrollbars, <select> popups, date pickers, autofill dropdowns,
+   spellcheck underlines, and the default page canvas.
+   Without this you get a bright white flash behind native
+   elements even when the app is in dark mode.
+   ============================================================ */
+:root {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -191,4 +208,133 @@ html.dark .shadow-xl {
 
 html.dark .shadow-2xl {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 92, 246, 0.1) !important;
+}
+/* ============================================================
+   THEME SWITCH CROSS-FADE
+   ------------------------------------------------------------
+   ThemeContext adds `theme-anim` to <html> for ~320ms whenever the
+   theme changes, then removes it. So we only pay for this global
+   transition during the switch — not for the whole session.
+
+   Icons / SVGs are excluded so they do not smear while rotating.
+   ============================================================ */
+html.theme-anim *,
+html.theme-anim *::before,
+html.theme-anim *::after {
+  transition-property: background-color, border-color, color, fill, stroke,
+    box-shadow, outline-color, text-decoration-color !important;
+  transition-duration: 300ms !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+html.theme-anim svg,
+html.theme-anim svg * {
+  transition-property: color, fill, stroke !important;
+}
+
+/* Respect users who ask the OS to reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-anim *,
+  html.theme-anim *::before,
+  html.theme-anim *::after {
+    transition-duration: 1ms !important;
+  }
+}
+
+/* ============================================================
+   DARK — GRADIENT STOPS
+   ------------------------------------------------------------
+   Tailwind gradients are `background-image`, so the
+   `background-color` overrides above never touched them. These are
+   the pastel page/backdrop gradients used on the 404 page, browse
+   header, auth pages etc. — without this they stay bright in dark
+   mode and look like a lit block on a dark screen.
+   ============================================================ */
+html.dark .from-slate-50  { --tw-gradient-from: #020617 !important; }
+html.dark .via-blue-50    { --tw-gradient-stops: #020617, rgba(30, 58, 138, 0.35), #1e1b4b !important; }
+html.dark .to-violet-100  { --tw-gradient-to: #1e1b4b !important; }
+html.dark .from-violet-50 { --tw-gradient-from: rgba(139, 92, 246, 0.15) !important; }
+html.dark .to-purple-50   { --tw-gradient-to: rgba(168, 85, 247, 0.15) !important; }
+html.dark .from-white     { --tw-gradient-from: #0f172a !important; }
+html.dark .to-white       { --tw-gradient-to: #0f172a !important; }
+
+/* ============================================================
+   DARK — EXTRA SURFACE / TEXT COVERAGE
+   Fills the gaps that were missing before.
+   ============================================================ */
+html.dark .bg-slate-300 { background-color: #475569 !important; }
+
+html.dark .text-slate-300,
+html.dark .text-gray-300 { color: #94a3b8 !important; }
+
+html.dark .text-slate-200,
+html.dark .text-gray-200 { color: #cbd5e1 !important; }
+
+html.dark .hover\:bg-slate-200:hover,
+html.dark .hover\:bg-gray-200:hover { background-color: #475569 !important; }
+
+html.dark .ring-white { --tw-ring-color: #0f172a !important; }
+html.dark .divide-slate-300 > * + * { border-color: #334155 !important; }
+
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-50\/80 { background-color: rgba(2, 6, 23, 0.6) !important; }
+
+/* Modals / popovers that forgot a dark variant */
+html.dark [role="dialog"],
+html.dark [role="menu"] {
+  color-scheme: dark;
+}
+
+/* ============================================================
+   DARK — LEAFLET MAP (ServiceMap.jsx)
+   ------------------------------------------------------------
+   Flips the bright OSM raster tiles dark and restyles Leaflet's
+   own chrome (popups, zoom buttons, attribution) which ships with
+   hardcoded white backgrounds.
+   ============================================================ */
+html.dark .leaflet-container {
+  background-color: #0f172a;
+}
+
+html.dark .leaflet-tile-pane {
+  filter: brightness(0.65) invert(1) contrast(1.15) hue-rotate(180deg) saturate(0.65);
+}
+
+html.dark .leaflet-popup-content-wrapper,
+html.dark .leaflet-popup-tip {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+  border: 1px solid #1e293b;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+}
+
+html.dark .leaflet-popup-content {
+  color: #f1f5f9 !important;
+}
+
+html.dark .leaflet-bar,
+html.dark .leaflet-bar a {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+html.dark .leaflet-bar a:hover {
+  background-color: #334155 !important;
+}
+
+html.dark .leaflet-control-attribution {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  color: #64748b !important;
+}
+
+html.dark .leaflet-control-attribution a {
+  color: #94a3b8 !important;
+}
+
+/* Keep Leaflet's own images/logo from being inverted by the tile filter */
+html.dark .leaflet-control-attribution img,
+html.dark .leaflet-marker-icon,
+html.dark .leaflet-marker-shadow {
+  filter: none !important;
 }

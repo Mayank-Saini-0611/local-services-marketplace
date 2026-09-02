@@ -1,22 +1,68 @@
 <!doctype html>
 <html lang="en">
   <head>
-    
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- favicon.svg actually exists in /public (vite.svg did not -> 404 in console) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
+
+    <!-- Colours the browser chrome on mobile. Overwritten live by ThemeContext. -->
+    <meta name="theme-color" content="#fafafa" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    
+
     <title>Local Services Marketplace</title>
+
+    <!--
+      ============================================================
+      NO-FLASH (FOUC) GUARD
+      ------------------------------------------------------------
+      This runs BEFORE React mounts and before the first paint, so
+      the correct theme is already on <html> and you never see a
+      white flash on a dark page (or a dark flash on a light page).
+
+      It must stay in sync with `STORAGE_KEY` in src/context/ThemeContext.jsx
+      which is the string 'theme'.
+
+      Stored value: 'dark' | 'light' | 'system' | (nothing yet)
+      ============================================================
+    -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var prefersDark =
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+          var isDark =
+            saved === 'dark' ||
+            ((saved === 'system' || saved === null || saved === undefined || saved === '') && prefersDark);
+
+          var root = document.documentElement;
+          root.classList.toggle('dark', !!isDark);
+          root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+          root.style.colorScheme = isDark ? 'dark' : 'light';
+
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', isDark ? '#020617' : '#fafafa');
+        } catch (e) {
+          /* localStorage blocked (private mode) — fall back to OS preference */
+          try {
+            var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.classList.toggle('dark', d);
+          } catch (_) {}
+        }
+      })();
+    </script>
 </head>
 
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    
+
   </body>
 </html>

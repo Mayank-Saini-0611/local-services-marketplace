@@ -7,6 +7,8 @@ export default defineConfig({
   server: {
     port: 5173,         // Forces Vite to strictly use Port 5173
     strictPort: true,   // Prevents Vite from auto-switching to 5174 if busy
+    host: '0.0.0.0',    // Listen on all interfaces (needed for containers / LAN preview)
+    allowedHosts: true, // Accept proxied hostnames (preview tunnels, ngrok, etc.)
     headers: {
       // Allows the Google OAuth popup window to communicate with our parent window
       "Cross-Origin-Opener-Policy": "same-origin-allow-popups",

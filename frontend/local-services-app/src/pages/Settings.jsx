@@ -4,7 +4,9 @@ import { authApi } from '../api/authApi';
 import { listingApi } from '../api/listingApi';
 import { tokenStorage } from '../utils/tokenStorage';
 import { useTranslation } from 'react-i18next';
-import { 
+import { useTheme } from '../context/ThemeContext';
+import ThemeToggle from '../components/ThemeToggle';
+import {
   Bell,
   Mail,
   Globe,
@@ -15,13 +17,20 @@ import {
   Loader2,
   Eye,
   Upload,
-  Clock
+  Clock,
+  Palette,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 
 function Settings() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const user = tokenStorage.getUser();
+
+  // Theme (light / dark / system) — drives the Appearance card below
+  const { theme, resolvedTheme, systemTheme } = useTheme();
 
   const [settings, setSettings] = useState({
     emailNotifications: true,
@@ -112,6 +121,68 @@ function Settings() {
       <div>
         <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">{t('settings.settings')}</h1>
         <p className="text-slate-500 mt-1">{t('settings.managePreferences')}</p>
+      </div>
+
+      {/* ================= APPEARANCE / THEME ================= */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
+            <Palette className="w-5 h-5 text-violet-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900">Appearance</h3>
+            <p className="text-xs text-slate-500">Choose how Local Services looks on this device</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {/* Light / Dark / System picker */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl">
+            <div className="flex items-start gap-3">
+              {resolvedTheme === 'dark'
+                ? <Moon className="w-5 h-5 text-slate-500 mt-0.5" />
+                : <Sun className="w-5 h-5 text-slate-500 mt-0.5" />}
+              <div>
+                <p className="font-semibold text-slate-900">Colour theme</p>
+                <p className="text-xs text-slate-500">
+                  {theme === 'system'
+                    ? `Following your system setting (${systemTheme})`
+                    : `Manually set to ${theme}`}
+                </p>
+              </div>
+            </div>
+            <ThemeToggle variant="segmented" className="self-start sm:self-auto" />
+          </div>
+
+          {/* Quick switch, same control as the navbar */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+            <div className="flex items-start gap-3">
+              <Monitor className="w-5 h-5 text-slate-500 mt-0.5" />
+              <div>
+                <p className="font-semibold text-slate-900">Quick toggle</p>
+                <p className="text-xs text-slate-500">
+                  Instantly flip between light and dark — same switch as the top bar
+                </p>
+              </div>
+            </div>
+            <ThemeToggle />
+          </div>
+
+          {/* Live preview chips so the user can see the palette */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Surface', cls: 'bg-white' },
+              { label: 'Sunken', cls: 'bg-slate-100' },
+              { label: 'Border', cls: 'bg-slate-200' },
+              { label: 'Accent', cls: 'bg-violet-600' },
+            ].map((swatch) => (
+              <div key={swatch.label} className="space-y-2">
+                <div className={`h-14 rounded-xl border border-slate-200 ${swatch.cls}`} />
+                <p className="text-xs font-medium text-slate-500 text-center">{swatch.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* IDENTITY VERIFICATION (PROVIDERS ONLY) */}
