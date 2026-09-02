@@ -1,4 +1,4 @@
-﻿namespace LocalServices.Api.DTOs
+namespace LocalServices.Api.DTOs
 {
     public class ListingResponseDto
     {
@@ -28,5 +28,6 @@
         public double AverageRating { get; set; }
         public int ReviewCount { get; set; }
         public string ProviderKycStatus { get; set; } = "unverified";
+        public ProviderVerificationDto ProviderVerification { get; set; } = new();
     }
 }

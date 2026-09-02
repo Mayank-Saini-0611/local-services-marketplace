@@ -22,7 +22,7 @@ function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const { unreadCount: chatUnread } = useChat();
 
   if (!user) {

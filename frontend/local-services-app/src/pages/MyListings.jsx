@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listingApi } from '../api/listingApi';
 import { categoryApi } from '../api/categoryApi';
@@ -8,23 +8,18 @@ import {
   Pencil,
   Trash2,
   Eye,
-  EyeOff,
   Briefcase,
   CheckCircle2,
-  XCircle,
   AlertCircle,
   Loader2,
   X,
   MapPin,
   Tag,
   IndianRupee,
-  FileText,
   Save,
   PauseCircle,
   PlayCircle,
   Upload,
-  Image as ImageIcon,
-  XCircle as XCircleIcon
 } from 'lucide-react';
 
 function MyListings() {
@@ -58,12 +53,12 @@ function MyListings() {
     }
   }, [user, navigate]);
 
-  // Fetch data on mount
-  useEffect(() => {
-    fetchData();
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [listingsData, categoriesData] = await Promise.all([
@@ -78,12 +73,16 @@ function MyListings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  // Fetch data on mount
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchData();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchData]);
 
   const openCreateModal = () => {
     setEditingListing(null);

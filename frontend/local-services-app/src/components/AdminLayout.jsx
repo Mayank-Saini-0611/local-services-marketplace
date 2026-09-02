@@ -11,12 +11,13 @@ import {
   LogOut, 
   Bell,
   ChevronDown,
-  Sparkles,
   Menu,
   X,
   Shield,
   ArrowLeft,
-  ShieldCheck
+  ShieldCheck,
+  Star,
+  Flag
 } from 'lucide-react';
 
 function AdminLayout() {
@@ -59,6 +60,8 @@ const handleNotificationClick = (notification) => {
     { path: '/admin/listings', icon: Briefcase, label: 'Listings' },
     { path: '/admin/bookings', icon: Calendar, label: 'Bookings' },
     { path: '/admin/kyc', icon: ShieldCheck, label: 'KYC Approvals' },
+    { path: '/admin/reviews', icon: Star, label: 'Review Moderation' },
+    { path: '/admin/reports', icon: Flag, label: 'Safety Reports' },
   ];
 
   return (

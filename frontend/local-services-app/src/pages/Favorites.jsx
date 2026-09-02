@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { favoriteApi } from '../api/favoriteApi';
+import VerificationBadges from '../components/VerificationBadges';
 import { useTranslation } from 'react-i18next';
 import {
   Heart,
@@ -38,11 +39,12 @@ function Favorites() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
-  useEffect(() => {
-    fetchFavorites();
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     setLoading(true);
     try {
       const data = await favoriteApi.getAll();
@@ -53,12 +55,15 @@ function Favorites() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchFavorites();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchFavorites]);
 
   const handleRemove = async (listingId, e) => {
     e.stopPropagation();
@@ -169,6 +174,12 @@ function Favorites() {
                   {listing.title}
                 </h3>
                 <p className="text-xs text-slate-500 mb-2">by {listing.providerName}</p>
+                <VerificationBadges
+                  verification={listing.providerVerification}
+                  legacyKycStatus={listing.providerKycStatus}
+                  compact
+                  className="mb-2"
+                />
 
                 <div className="flex items-center gap-2 mb-3 text-xs text-slate-500">
                   <div className="flex items-center gap-1">

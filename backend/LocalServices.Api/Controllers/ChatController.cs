@@ -1,4 +1,4 @@
-﻿using LocalServices.Api.Data;
+using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
 using LocalServices.Api.Hubs;
 using LocalServices.Api.Models;
@@ -37,7 +37,11 @@ namespace LocalServices.Api.Controllers
                 .Include(r => r.Customer)
                 .Include(r => r.Provider)
                 .Include(r => r.Listing)
-                .Where(r => r.CustomerId == userId.Value || r.ProviderId == userId.Value)
+                .Where(r =>
+                    (r.CustomerId == userId.Value || r.ProviderId == userId.Value) &&
+                    !_context.UserBlocks.Any(b =>
+                        (b.BlockerId == userId.Value && b.BlockedUserId == (r.CustomerId == userId.Value ? r.ProviderId : r.CustomerId)) ||
+                        (b.BlockedUserId == userId.Value && b.BlockerId == (r.CustomerId == userId.Value ? r.ProviderId : r.CustomerId))))
                 .OrderByDescending(r => r.LastMessageAt ?? r.CreatedAt)
                 .ToListAsync();
 
@@ -86,6 +90,12 @@ namespace LocalServices.Api.Controllers
 
             if (me.Id == other.Id)
                 return BadRequest(new { message = "Cannot chat with yourself" });
+
+            var isBlocked = await _context.UserBlocks.AnyAsync(b =>
+                (b.BlockerId == me.Id && b.BlockedUserId == other.Id) ||
+                (b.BlockerId == other.Id && b.BlockedUserId == me.Id));
+            if (isBlocked)
+                return BadRequest(new { message = "Messaging with this user is unavailable." });
 
             // Determine who is customer and who is provider
             int customerId, providerId;
@@ -184,16 +194,25 @@ namespace LocalServices.Api.Controllers
             if (room.CustomerId != userId.Value && room.ProviderId != userId.Value)
                 return Forbid();
 
+            var otherUserId = room.CustomerId == userId.Value ? room.ProviderId : room.CustomerId;
+            var isBlocked = await _context.UserBlocks.AnyAsync(b =>
+                (b.BlockerId == userId.Value && b.BlockedUserId == otherUserId) ||
+                (b.BlockerId == otherUserId && b.BlockedUserId == userId.Value));
+            if (isBlocked)
+                return BadRequest(new { message = "Messaging with this user is unavailable." });
+
             var me = await _context.Users.FindAsync(userId.Value);
 
             var sanitizer = new Ganss.Xss.HtmlSanitizer();
             var sanitizedContent = sanitizer.Sanitize(dto.Content.Trim());
+            if (string.IsNullOrWhiteSpace(sanitizedContent))
+                return BadRequest(new { message = "Message cannot be empty." });
 
             var message = new ChatMessage
             {
                 RoomId = dto.RoomId,
                 SenderId = userId.Value,
-                Content = dto.Content.Trim(),
+                Content = sanitizedContent,
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             };
@@ -219,7 +238,6 @@ namespace LocalServices.Api.Controllers
             };
 
             // Send real-time to other user
-            var otherUserId = room.CustomerId == userId.Value ? room.ProviderId : room.CustomerId;
             await _chatHub.Clients.Group($"chat_user_{otherUserId}")
                 .SendAsync("ReceiveMessage", messageDto);
 

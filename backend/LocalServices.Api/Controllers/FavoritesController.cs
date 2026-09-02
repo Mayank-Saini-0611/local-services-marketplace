@@ -1,6 +1,7 @@
 ﻿using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
 using LocalServices.Api.Models;
+using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,10 +15,12 @@ namespace LocalServices.Api.Controllers
     public class FavoritesController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly ProviderTrustService _providerTrustService;
 
-        public FavoritesController(AppDbContext context)
+        public FavoritesController(AppDbContext context, ProviderTrustService providerTrustService)
         {
             _context = context;
+            _providerTrustService = providerTrustService;
         }
 
         // ============================================
@@ -51,6 +54,7 @@ namespace LocalServices.Api.Controllers
                     ProviderId = f.Listing.ProviderId,
                     ProviderName = f.Listing.Provider!.FullName,
                     ProviderEmail = f.Listing.Provider.Email,
+                    ProviderKycStatus = f.Listing.Provider.KycStatus,
                     ProviderPhone = f.Listing.Provider.Phone,
                     CategoryId = f.Listing.CategoryId,
                     CategoryName = f.Listing.Category!.Name
@@ -60,7 +64,7 @@ namespace LocalServices.Api.Controllers
             // Add ratings
             var listingIds = favorites.Select(l => l.Id).ToList();
             var ratingsData = await _context.Reviews
-                .Where(r => listingIds.Contains(r.ListingId))
+                .Where(r => listingIds.Contains(r.ListingId) && r.ModerationStatus == "published")
                 .GroupBy(r => r.ListingId)
                 .Select(g => new { ListingId = g.Key, Avg = g.Average(r => r.Rating), Count = g.Count() })
                 .ToListAsync();
@@ -70,6 +74,14 @@ namespace LocalServices.Api.Controllers
                 var rating = ratingsData.FirstOrDefault(r => r.ListingId == listing.Id);
                 listing.AverageRating = rating != null ? Math.Round(rating.Avg, 1) : 0;
                 listing.ReviewCount = rating?.Count ?? 0;
+            }
+
+            var verificationByProvider = await _providerTrustService.GetForProvidersAsync(
+                favorites.Select(listing => listing.ProviderId));
+            foreach (var listing in favorites)
+            {
+                if (verificationByProvider.TryGetValue(listing.ProviderId, out var verification))
+                    listing.ProviderVerification = verification;
             }
 
             return Ok(favorites);

@@ -1,15 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { adminApi } from '../api/adminApi';
 import { tokenStorage } from '../utils/tokenStorage';
 import { 
   Users,
   Search, 
-  Filter,
   Mail,
   Phone,
   Calendar,
-  Shield,
-  UserCheck,
   Briefcase,
   Trash2,
   Edit2,
@@ -17,9 +14,9 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  ChevronDown,
   Crown,
-  User
+  User,
+  ShieldCheck
 } from 'lucide-react';
 
 function AdminUsers() {
@@ -33,19 +30,31 @@ function AdminUsers() {
   
   const [editingUser, setEditingUser] = useState(null);
   const [newRole, setNewRole] = useState('');
+  const [verificationUser, setVerificationUser] = useState(null);
+  const [verificationForm, setVerificationForm] = useState({
+    phoneVerified: false,
+    backgroundChecked: false,
+    businessVerified: false,
+  });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const searchRef = useRef(search);
 
   useEffect(() => {
-    fetchUsers();
-  }, [roleFilter]);
+    searchRef.current = search;
+  }, [search]);
 
-  const fetchUsers = async () => {
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminApi.getAllUsers({ 
+      const data = await adminApi.getAllUsers({
         role: roleFilter,
-        search: search.trim() || undefined
+        search: searchRef.current.trim() || undefined
       });
       setUsers(data);
     } catch (err) {
@@ -54,12 +63,15 @@ function AdminUsers() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [roleFilter, showToast]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchUsers();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchUsers]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -78,6 +90,31 @@ function AdminUsers() {
     } catch (err) {
       console.error('Update role error:', err);
       showToast(err.response?.data?.message || 'Failed to update role', 'error');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const openVerificationEditor = (user) => {
+    setVerificationUser(user);
+    setVerificationForm({
+      phoneVerified: Boolean(user.phoneVerified),
+      backgroundChecked: Boolean(user.backgroundChecked),
+      businessVerified: Boolean(user.businessVerified),
+    });
+  };
+
+  const handleUpdateVerification = async () => {
+    if (!verificationUser) return;
+    setIsUpdating(true);
+    try {
+      await adminApi.updateProviderVerification(verificationUser.id, verificationForm);
+      showToast('Provider trust checks updated.');
+      setVerificationUser(null);
+      fetchUsers();
+    } catch (err) {
+      console.error('Update verification error:', err);
+      showToast(err.response?.data?.message || 'Failed to update verification', 'error');
     } finally {
       setIsUpdating(false);
     }
@@ -297,6 +334,15 @@ function AdminUsers() {
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-1">
+                          {user.role === 'provider' && (
+                            <button
+                              onClick={() => openVerificationEditor(user)}
+                              className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50"
+                              title="Manage provider trust checks"
+                            >
+                              <ShieldCheck className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => { setEditingUser(user); setNewRole(user.role); }}
                             disabled={isMe}
@@ -353,6 +399,15 @@ function AdminUsers() {
                       <span>📅 {user.totalBookings}</span>
                     </div>
                     <div className="flex gap-1">
+                      {user.role === 'provider' && (
+                        <button
+                          onClick={() => openVerificationEditor(user)}
+                          className="rounded-lg p-2 text-green-600 hover:bg-green-50"
+                          title="Manage provider trust checks"
+                        >
+                          <ShieldCheck className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => { setEditingUser(user); setNewRole(user.role); }}
                         disabled={isMe}
@@ -437,6 +492,51 @@ function AdminUsers() {
                   className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update Role'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROVIDER TRUST CHECKS MODAL */}
+      {verificationUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 p-6">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Provider trust checks</h3>
+                <p className="mt-0.5 text-sm text-slate-500">{verificationUser.fullName}</p>
+              </div>
+              <button type="button" onClick={() => setVerificationUser(null)} className="rounded-lg p-2 hover:bg-slate-100" aria-label="Close trust checks">
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="space-y-3 p-6">
+              <p className="text-xs leading-5 text-slate-500">Only enable a manual check after reviewing the required evidence. Identity verification is managed separately in KYC Approvals.</p>
+              {[
+                ['phoneVerified', 'Phone verified', 'Confirm the phone number belongs to this provider.'],
+                ['backgroundChecked', 'Background checked', 'Confirm your organization completed the documented check.'],
+                ['businessVerified', 'Business verified', 'Confirm the submitted business information.'],
+              ].map(([key, label, description]) => (
+                <label key={key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={verificationForm[key]}
+                    onChange={(event) => setVerificationForm((current) => ({ ...current, [key]: event.target.checked }))}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">{label}</span>
+                    <span className="mt-1 block text-xs text-slate-500">{description}</span>
+                  </span>
+                </label>
+              ))}
+              <div className="flex gap-3 pt-3">
+                <button type="button" onClick={() => setVerificationUser(null)} className="flex-1 rounded-xl border border-slate-200 py-3 font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="button" onClick={handleUpdateVerification} disabled={isUpdating} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Save checks
                 </button>
               </div>
             </div>

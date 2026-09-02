@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatApi } from '../api/chatApi';
-import { tokenStorage } from '../utils/tokenStorage';
 import { useChat } from '../context/ChatContext';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,9 +10,8 @@ import {
 
 function Messages() {
   const navigate = useNavigate();
-  const user = tokenStorage.getUser();
   const { t } = useTranslation();
-  const { subscribe, fetchUnread, decrementUnread } = useChat();
+  const { subscribe, decrementUnread } = useChat();
 
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -26,9 +24,24 @@ function Messages() {
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
   const messagesEndRef = useRef(null);
 
-  useEffect(() => {
-    fetchRooms();
+  const fetchRooms = useCallback(async () => {
+    try {
+      const data = await chatApi.getRooms();
+      setRooms(data);
+    } catch (err) {
+      console.error('Rooms fetch error:', err);
+    } finally {
+      setLoadingRooms(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchRooms();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchRooms]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -52,18 +65,7 @@ function Messages() {
       fetchRooms();
     });
     return unsub;
-  }, [selectedRoom, subscribe]);
-
-  const fetchRooms = async () => {
-    try {
-      const data = await chatApi.getRooms();
-      setRooms(data);
-    } catch (err) {
-      console.error('Rooms fetch error:', err);
-    } finally {
-      setLoadingRooms(false);
-    }
-  };
+  }, [selectedRoom, subscribe, fetchRooms]);
 
   const openRoom = async (room) => {
     setSelectedRoom(room);

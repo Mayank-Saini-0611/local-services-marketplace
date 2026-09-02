@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Star, MapPin, IndianRupee } from 'lucide-react';
+import { Star } from 'lucide-react';
 
 // --- FIX FOR LEAFLET ICONS IN REACT ---
 // React-Leaflet has a known bug where default marker icons don't load correctly via Webpack/Vite.
@@ -39,6 +39,8 @@ const CITY_COORDINATES = {
   'Jaipur': [26.9124, 75.7873]
 };
 
+const DEFAULT_CENTER = [20.5937, 78.9629];
+
 // Helper to get category image (matching BrowseServices)
 const getListingImage = (listing) => {
   if (listing.imageUrls && listing.imageUrls.length > 0) return listing.imageUrls[0];
@@ -57,41 +59,36 @@ const getListingImage = (listing) => {
 
 function ServiceMap({ listings, userLocation }) {
   const navigate = useNavigate();
-  const [mapListings, setMapListings] = useState([]);
 
-  // Default center of India if user location is unknown
-  const defaultCenter = [20.5937, 78.9629];
-  const center = userLocation?.latitude && userLocation?.longitude 
-    ? [userLocation.latitude, userLocation.longitude] 
-    : (CITY_COORDINATES[userLocation?.city] || defaultCenter);
+  const center = userLocation?.latitude && userLocation?.longitude
+    ? [userLocation.latitude, userLocation.longitude]
+    : (CITY_COORDINATES[userLocation?.city] || DEFAULT_CENTER);
 
   const zoomLevel = userLocation?.city ? 11 : 5;
 
-  useEffect(() => {
-    // Generate scattered coordinates for listings based on their city name
-    // (So if 5 plumbers are in "Delhi", their pins don't overlap perfectly)
-    const processed = listings.map((listing, index) => {
-      const baseCoords = CITY_COORDINATES[listing.location] || defaultCenter;
-      
-      // Add a tiny random offset (approx 1-3 km scatter)
-      const offsetLat = (Math.random() - 0.5) * 0.05;
-      const offsetLng = (Math.random() - 0.5) * 0.05;
+  // Coordinates are derived data. Memoizing them keeps marker positions stable between renders
+  // and avoids an effect-driven render loop when the parent updates unrelated state.
+  const mapListings = useMemo(() => listings.map((listing) => {
+    const baseCoords = CITY_COORDINATES[listing.location] || DEFAULT_CENTER;
 
-      return {
-        ...listing,
-        mapLat: baseCoords[0] + offsetLat,
-        mapLng: baseCoords[1] + offsetLng
-      };
-    });
-    setMapListings(processed);
-  }, [listings]);
+    // Add a small stable offset (approx 1-3 km scatter) so pins do not overlap.
+    const offsetSeed = Number(listing.id) || 0;
+    const offsetLat = ((offsetSeed % 11) - 5) * 0.005;
+    const offsetLng = ((Math.floor(offsetSeed / 11) % 11) - 5) * 0.005;
+
+    return {
+      ...listing,
+      mapLat: baseCoords[0] + offsetLat,
+      mapLng: baseCoords[1] + offsetLng
+    };
+  }), [listings]);
 
   return (
     <div className="w-full h-[600px] rounded-3xl overflow-hidden border border-slate-200 shadow-lg relative z-0">
-      <MapContainer 
-        center={center} 
-        zoom={zoomLevel} 
-        scrollWheelZoom={true} 
+      <MapContainer
+        center={center}
+        zoom={zoomLevel}
+        scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
       >
         <TileLayer
@@ -108,10 +105,10 @@ function ServiceMap({ listings, userLocation }) {
                 <div className="text-xs text-slate-500">Searching nearby services</div>
               </Popup>
             </Marker>
-            <Circle 
-              center={[userLocation.latitude, userLocation.longitude]} 
-              radius={15000} // 15 km radius
-              pathOptions={{ fillColor: '#8b5cf6', color: '#7c3aed', fillOpacity: 0.1, weight: 1 }} 
+            <Circle
+              center={[userLocation.latitude, userLocation.longitude]}
+              radius={15000}
+              pathOptions={{ fillColor: '#8b5cf6', color: '#7c3aed', fillOpacity: 0.1, weight: 1 }}
             />
           </>
         )}
@@ -121,9 +118,9 @@ function ServiceMap({ listings, userLocation }) {
           <Marker key={listing.id} position={[listing.mapLat, listing.mapLng]}>
             <Popup className="custom-popup">
               <div className="w-48 overflow-hidden rounded-xl">
-                <img 
-                  src={getListingImage(listing)} 
-                  alt={listing.title} 
+                <img
+                  src={getListingImage(listing)}
+                  alt={listing.title}
                   className="w-full h-24 object-cover rounded-t-lg"
                 />
                 <div className="p-3">
@@ -142,7 +139,7 @@ function ServiceMap({ listings, userLocation }) {
                       ₹{listing.price}
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => navigate(`/dashboard/listing/${listing.id}`)}
                     className="w-full mt-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-xs font-bold rounded-lg hover:shadow-md transition-all"
                   >

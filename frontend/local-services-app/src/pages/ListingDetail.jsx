@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { listingApi } from '../api/listingApi';
 import { favoriteApi } from '../api/favoriteApi';
@@ -7,7 +7,8 @@ import { tokenStorage } from '../utils/tokenStorage';
 import { reviewApi } from '../api/reviewApi';
 import { chatApi } from '../api/chatApi';
 import { couponApi } from '../api/couponApi';
-import { useTranslation } from 'react-i18next';
+import VerificationBadges from '../components/VerificationBadges';
+import SafetyReportModal from '../components/SafetyReportModal';
 import { 
   ArrowLeft,
   MapPin, 
@@ -18,8 +19,6 @@ import {
   Phone,
   Mail,
   Shield,
-  Award,
-  Clock,
   CheckCircle2,
   MessageCircle,
   MessageSquare,
@@ -29,8 +28,7 @@ import {
   X,
   Send,
   AlertCircle,
-  Tag,
-  Briefcase
+  Flag
 } from 'lucide-react';
 
 // Category fallback images
@@ -52,25 +50,10 @@ const getListingImages = (listing) => {
   return [imageMap[listing.categoryName] || 'https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1200&q=80'];
 };
 
-const getCategoryImage = (categoryName) => {
-  const imageMap = {
-    'Plumber': 'https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=1200&q=80',
-    'Electrician': 'https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=1200&q=80',
-    'Tutor': 'https://images.unsplash.com/photo-1581726707445-75cbe4efc586?w=1200&q=80',
-    'Cleaner': 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80',
-    'Carpenter': 'https://images.unsplash.com/photo-1601058268499-e52658b8bb88?w=1200&q=80',
-    'Painter': 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=1200&q=80',
-    'AC Repair': 'https://images.unsplash.com/photo-1631545806609-073f5c39d2b9?w=1200&q=80',
-    'Gardener': 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=1200&q=80',
-  };
-  return imageMap[categoryName] || 'https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1200&q=80';
-};
-
 function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = tokenStorage.getUser();
-  const { t } = useTranslation();
 
   // Core Data States
   const [listing, setListing] = useState(null);
@@ -79,6 +62,8 @@ function ListingDetail() {
   const [error, setError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportNotice, setReportNotice] = useState('');
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
 
   // Reviews States
@@ -110,22 +95,17 @@ function ListingDetail() {
     }
   }, [id]);
 
-  useEffect(() => {
-    fetchListing();
-    window.scrollTo(0, 0);
-  }, [id]);
-
-  const fetchListing = async () => {
+  const fetchListing = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await listingApi.getById(id);
       setListing(data);
-      
+
       try {
-        const similar = await listingApi.getAll({ 
-          categoryId: data.categoryId, 
-          pageSize: 4 
+        const similar = await listingApi.getAll({
+          categoryId: data.categoryId,
+          pageSize: 4
         });
         setSimilarListings((similar.data || []).filter(l => l.id !== data.id).slice(0, 3));
       } catch (e) {
@@ -149,7 +129,16 @@ function ListingDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchListing();
+    }, 0);
+    window.scrollTo(0, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchListing]);
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -159,7 +148,7 @@ function ListingDetail() {
           text: listing.description,
           url: window.location.href,
         });
-      } catch (e) {
+      } catch {
         console.log('Share cancelled');
       }
     } else {
@@ -405,23 +394,20 @@ function ListingDetail() {
                     {listing.location}
                   </div>
                   <span className="text-slate-300">•</span>
-                  <div className="flex items-center gap-1 text-green-600">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Verified Partner
-                  </div>
+                  {listing.providerVerification?.isVerified && (
+                    <div className="flex items-center gap-1 text-green-600">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Identity verified
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
             <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-100">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                <Shield className="w-3 h-3" />Insured
-              </div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
-                <Award className="w-3 h-3" />Top Rated
-              </div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-                <Clock className="w-3 h-3" />Fast Response
-              </div>
+              <VerificationBadges
+                verification={listing.providerVerification}
+                legacyKycStatus={listing.providerKycStatus}
+              />
             </div>
           </div>
 
@@ -622,6 +608,18 @@ function ListingDetail() {
               {showContact ? 'Hide Contact' : 'Contact Provider'}
             </button>
 
+            {String(user?.userId) !== String(listing.providerId) && (
+              <button
+                type="button"
+                onClick={() => setShowReportModal(true)}
+                className="w-full py-2.5 border border-red-200 text-red-700 font-semibold rounded-xl hover:bg-red-50 flex items-center justify-center gap-2"
+              >
+                <Flag className="w-4 h-4" />
+                Report provider or listing
+              </button>
+            )}
+            {reportNotice && <p className="mt-2 text-center text-sm text-green-700" role="status">{reportNotice}</p>}
+
             {showContact && (
               <div className="mt-4 p-4 bg-violet-50 border border-violet-100 rounded-xl space-y-3">
                 <div className="flex items-center gap-3">
@@ -649,10 +647,12 @@ function ListingDetail() {
               </div>
             )}
 
-            <p className="text-xs text-slate-500 text-center mt-4 flex items-center justify-center gap-1">
-              <Shield className="w-3 h-3" />
-              Secure & verified provider
-            </p>
+            {listing.providerVerification?.isVerified && (
+              <p className="text-xs text-slate-500 text-center mt-4 flex items-center justify-center gap-1">
+                <Shield className="w-3 h-3" />
+                Identity verified by the marketplace
+              </p>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
@@ -666,17 +666,20 @@ function ListingDetail() {
                 {listing.providerName?.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-900 truncate group-hover:text-violet-600 transition-colors flex items-center gap-1.5">
+                <p className="font-bold text-slate-900 truncate group-hover:text-violet-600 transition-colors">
                   {listing.providerName}
-                  {listing.providerKycStatus === 'verified' && (
-                    <Shield className="w-4 h-4 text-blue-500 fill-blue-500 flex-shrink-0" title="Verified Professional" />
-                  )}
                 </p>
+                <VerificationBadges
+                  verification={listing.providerVerification}
+                  legacyKycStatus={listing.providerKycStatus}
+                  compact
+                  className="mt-1"
+                />
                 <div className="flex items-center gap-1 text-xs text-slate-500">
                   <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                  <span className="font-semibold">4.9</span>
+                  <span className="font-semibold">{listing.averageRating > 0 ? listing.averageRating.toFixed(1) : 'New'}</span>
                   <span>•</span>
-                  <span>234 jobs done</span>
+                  <span>{listing.providerVerification?.completedJobs ?? 0} jobs done</span>
                 </div>
               </div>
             </div>
@@ -775,12 +778,13 @@ function ListingDetail() {
                     {listing.providerName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="flex items-center gap-1">
-                      <p className="font-bold text-slate-900 truncate">{listing.providerName}</p>
-                      {listing.providerKycStatus === 'verified' && (
-                        <Shield className="w-4 h-4 text-blue-500 fill-blue-500" title="Verified Professional" />
-                      )}
-                    </div>
+                    <p className="font-bold text-slate-900 truncate">{listing.providerName}</p>
+                    <VerificationBadges
+                      verification={listing.providerVerification}
+                      legacyKycStatus={listing.providerKycStatus}
+                      compact
+                      className="mt-1"
+                    />
                     <p className="text-xs text-slate-500">Will receive your request via email</p>
                   </div>
                 </div>
@@ -924,6 +928,19 @@ function ListingDetail() {
             )}
           </div>
         </div>
+      )}
+
+      {showReportModal && (
+        <SafetyReportModal
+          reportedUserId={listing.providerId}
+          reportedUserName={listing.providerName}
+          listingId={listing.id}
+          onClose={() => setShowReportModal(false)}
+          onComplete={(message) => {
+            setShowReportModal(false);
+            setReportNotice(message);
+          }}
+        />
       )}
     </div>
   );

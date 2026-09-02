@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { providerApi } from '../api/providerApi';
 import { tokenStorage } from '../utils/tokenStorage';
@@ -13,15 +13,7 @@ function Earnings() {
   const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user?.role !== 'provider') {
-      navigate('/dashboard');
-      return;
-    }
-    fetchEarnings();
-  }, [user, navigate]);
-
-  const fetchEarnings = async () => {
+  const fetchEarnings = useCallback(async () => {
     try {
       const data = await providerApi.getMyEarnings();
       setEarnings(data);
@@ -30,7 +22,19 @@ function Earnings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (user?.role !== 'provider') {
+      navigate('/dashboard');
+      return;
+    }
+    const refreshTimer = window.setTimeout(() => {
+      void fetchEarnings();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [user?.role, navigate, fetchEarnings]);
 
   if (loading) {
     return (

@@ -30,7 +30,9 @@ export function ChatProvider({ children }) {
     const token = tokenStorage.getToken();
     if (!token) return;
 
-    fetchUnread();
+    const unreadRefresh = window.setTimeout(() => {
+      void fetchUnread();
+    }, 0);
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl('https://localhost:7020/chatHub', {
@@ -50,7 +52,9 @@ export function ChatProvider({ children }) {
         try {
           const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
           audio.play().catch(() => {});
-        } catch (e) {}
+        } catch {
+          // Browsers may block audio until the user interacts with the page.
+        }
       }
 
       // Notify all listeners (e.g., Messages page)
@@ -64,6 +68,7 @@ export function ChatProvider({ children }) {
     connectionRef.current = connection;
 
     return () => {
+      window.clearTimeout(unreadRefresh);
       if (connectionRef.current) connectionRef.current.stop();
     };
   }, [fetchUnread]);

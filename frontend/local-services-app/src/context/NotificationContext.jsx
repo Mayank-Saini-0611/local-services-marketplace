@@ -72,8 +72,10 @@ export function NotificationProvider({ children }) {
     const token = tokenStorage.getToken();
     if (!token) return;
 
-    // Fetch initial notifications
-    fetchNotifications();
+    // Fetch initial notifications after the effect has subscribed to external systems.
+    const notificationRefresh = window.setTimeout(() => {
+      void fetchNotifications();
+    }, 0);
 
     // Create SignalR connection
     const connection = new signalR.HubConnectionBuilder()
@@ -101,7 +103,9 @@ export function NotificationProvider({ children }) {
       try {
         const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
         audio.play().catch(() => {});
-      } catch (e) {}
+      } catch {
+        // Browsers may block audio until the user interacts with the page.
+      }
     });
 
     // Start connection
@@ -113,6 +117,7 @@ export function NotificationProvider({ children }) {
 
     // Cleanup on unmount
     return () => {
+      window.clearTimeout(notificationRefresh);
       if (connectionRef.current) {
         connectionRef.current.stop();
       }

@@ -64,5 +64,14 @@ namespace LocalServices.Api.Models
 
         [Column("email_verification_token")]
         public string? EmailVerificationToken { get; set; }
+
+        [Column("phone_verified")]
+        public bool PhoneVerified { get; set; } = false;
+
+        [Column("background_checked")]
+        public bool BackgroundChecked { get; set; } = false;
+
+        [Column("business_verified")]
+        public bool BusinessVerified { get; set; } = false;
     }
 }

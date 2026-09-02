@@ -13,7 +13,7 @@ const DEFAULT_LOCATION = {
 };
 
 export function LocationProvider({ children }) {
-  const [location, setLocation] = useState(DEFAULT_LOCATION);
+  const [location, setLocation] = useState(() => locationService.getSavedLocation() || DEFAULT_LOCATION);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -93,12 +93,13 @@ export function LocationProvider({ children }) {
 
   // On mount: check for saved location, else try GPS
   useEffect(() => {
-    const saved = locationService.getSavedLocation();
-    if (saved) {
-      setLocation(saved);
-    } else {
-      detectLocation();
-    }
+    if (locationService.getSavedLocation()) return;
+
+    const detectionTimer = window.setTimeout(() => {
+      void detectLocation();
+    }, 0);
+
+    return () => window.clearTimeout(detectionTimer);
   }, [detectLocation]);
 
   const value = {

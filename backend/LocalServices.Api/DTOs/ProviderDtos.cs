@@ -1,4 +1,4 @@
-﻿namespace LocalServices.Api.DTOs
+namespace LocalServices.Api.DTOs
 {
     public class ProviderProfileDto
     {
@@ -14,6 +14,7 @@
         public double AverageRating { get; set; }
         public int TotalReviews { get; set; }
         public string KycStatus { get; set; } = string.Empty;
+        public ProviderVerificationDto Verification { get; set; } = new();
 
 
         public class ProviderEarningsDto

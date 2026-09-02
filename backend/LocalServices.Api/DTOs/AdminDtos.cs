@@ -1,4 +1,4 @@
-﻿namespace LocalServices.Api.DTOs
+namespace LocalServices.Api.DTOs
 {
     public class DashboardStatsDto
     {
@@ -41,6 +41,10 @@
         public int TotalListings { get; set; }
         public int TotalBookings { get; set; }
         public string KycStatus { get; set; } = string.Empty;
+        public bool EmailVerified { get; set; }
+        public bool PhoneVerified { get; set; }
+        public bool BackgroundChecked { get; set; }
+        public bool BusinessVerified { get; set; }
     }
 
     public class UpdateUserRoleDto

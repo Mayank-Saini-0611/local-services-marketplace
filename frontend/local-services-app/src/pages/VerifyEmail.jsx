@@ -7,22 +7,15 @@ function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(token));
   const [success, setSuccess] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(() => token ? '' : 'No verification token was provided in the link.');
   
   // Guard against React StrictMode double-execution
   const verificationAttempted = useRef(false);
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      setSuccess(false);
-      setMessage('No verification token was provided in the link.');
-      return;
-    }
-
-    if (verificationAttempted.current) return;
+    if (!token || verificationAttempted.current) return;
     verificationAttempted.current = true;
 
     authApi.verifyEmail(token)
@@ -73,14 +66,12 @@ function VerifyEmail() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto shadow-inner">
-              <CheckCircle2 className="w-12 h-12 text-amber-600 dark:text-amber-400" />
+            <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <XCircle className="w-12 h-12 text-red-600 dark:text-red-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Account Status</h2>
-              <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-                Your email has already been verified, or this link was already used.
-              </p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Verification Unsuccessful</h2>
+              <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">{message}</p>
             </div>
             <div className="space-y-2 pt-2">
               <Link

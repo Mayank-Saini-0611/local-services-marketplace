@@ -1,5 +1,6 @@
-﻿using LocalServices.Api.Data;
+using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
+using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using static LocalServices.Api.DTOs.ProviderProfileDto;
@@ -11,10 +12,12 @@ namespace LocalServices.Api.Controllers
     public class ProvidersController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly ProviderTrustService _providerTrustService;
 
-        public ProvidersController(AppDbContext context)
+        public ProvidersController(AppDbContext context, ProviderTrustService providerTrustService)
         {
             _context = context;
+            _providerTrustService = providerTrustService;
         }
 
         // ============================================
@@ -34,7 +37,9 @@ namespace LocalServices.Api.Controllers
                 .Include(b => b.Listing)
                 .CountAsync(b => b.Listing!.ProviderId == id && b.Status == "completed");
 
-            var reviews = await _context.Reviews.Where(r => r.ProviderId == id).ToListAsync();
+            var reviews = await _context.Reviews
+                .Where(r => r.ProviderId == id && r.ModerationStatus == "published")
+                .ToListAsync();
 
             var profile = new ProviderProfileDto
             {
@@ -47,7 +52,8 @@ namespace LocalServices.Api.Controllers
                 TotalActiveListings = activeListingsCount,
                 TotalJobsCompleted = completedBookingsCount,
                 TotalReviews = reviews.Count,
-                AverageRating = reviews.Any() ? Math.Round(reviews.Average(r => r.Rating), 1) : 0
+                AverageRating = reviews.Any() ? Math.Round(reviews.Average(r => r.Rating), 1) : 0,
+                Verification = await _providerTrustService.GetForProviderAsync(provider.Id)
             };
 
             return Ok(profile);
@@ -78,8 +84,9 @@ namespace LocalServices.Api.Controllers
                     IsActive = l.IsActive,
                     CreatedAt = l.CreatedAt,
                     UpdatedAt = l.UpdatedAt,
+                    ProviderKycStatus = l.Provider!.KycStatus,
                     ProviderId = l.ProviderId,
-                    ProviderName = l.Provider!.FullName,
+                    ProviderName = l.Provider.FullName,
                     ProviderEmail = l.Provider.Email,
                     ProviderPhone = l.Provider.Phone,
                     CategoryId = l.CategoryId,
@@ -90,7 +97,7 @@ namespace LocalServices.Api.Controllers
             // Add ratings to these listings
             var listingIds = listings.Select(l => l.Id).ToList();
             var ratingsData = await _context.Reviews
-                .Where(r => listingIds.Contains(r.ListingId))
+                .Where(r => listingIds.Contains(r.ListingId) && r.ModerationStatus == "published")
                 .GroupBy(r => r.ListingId)
                 .Select(g => new { ListingId = g.Key, Avg = g.Average(r => r.Rating), Count = g.Count() })
                 .ToListAsync();
@@ -100,6 +107,14 @@ namespace LocalServices.Api.Controllers
                 var rating = ratingsData.FirstOrDefault(r => r.ListingId == listing.Id);
                 listing.AverageRating = rating != null ? Math.Round(rating.Avg, 1) : 0;
                 listing.ReviewCount = rating?.Count ?? 0;
+            }
+
+            var verificationByProvider = await _providerTrustService.GetForProvidersAsync(
+                listings.Select(listing => listing.ProviderId));
+            foreach (var listing in listings)
+            {
+                if (verificationByProvider.TryGetValue(listing.ProviderId, out var verification))
+                    listing.ProviderVerification = verification;
             }
 
             return Ok(listings);
@@ -115,7 +130,7 @@ namespace LocalServices.Api.Controllers
             var reviews = await _context.Reviews
                 .Include(r => r.Customer)
                 .Include(r => r.Listing)
-                .Where(r => r.ProviderId == id)
+                .Where(r => r.ProviderId == id && r.ModerationStatus == "published")
                 .OrderByDescending(r => r.CreatedAt)
                 .Select(r => new ReviewResponseDto
                 {
@@ -126,8 +141,11 @@ namespace LocalServices.Api.Controllers
                     Rating = r.Rating,
                     Comment = r.Comment,
                     CreatedAt = r.CreatedAt,
+                    UpdatedAt = r.UpdatedAt,
                     CustomerId = r.CustomerId,
-                    CustomerName = r.Customer!.FullName
+                    CustomerName = r.Customer!.FullName,
+                    ProviderId = r.ProviderId,
+                    ProviderName = r.Provider!.FullName
                 })
                 .ToListAsync();
 

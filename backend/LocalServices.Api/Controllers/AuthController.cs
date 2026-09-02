@@ -1,4 +1,4 @@
-﻿using BCrypt.Net;
+using BCrypt.Net;
 using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
 using LocalServices.Api.Models;
@@ -145,6 +145,9 @@ namespace LocalServices.Api.Controllers
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleAuthDto dto)
         {
+            if (!string.IsNullOrEmpty(dto.Role) && dto.Role != "customer" && dto.Role != "provider")
+                return BadRequest(new { message = "Role must be 'customer' or 'provider'." });
+
             var clientId = _configuration["GoogleAuth:ClientId"];
             if (string.IsNullOrEmpty(clientId))
                 return BadRequest(new { message = "Google Auth is not configured on the server." });
@@ -494,7 +497,7 @@ namespace LocalServices.Api.Controllers
                     .ToListAsync();
 
                 var reviewsReceived = await _context.Reviews
-                    .Where(r => r.ProviderId == userId)
+                    .Where(r => r.ProviderId == userId && r.ModerationStatus == "published")
                     .ToListAsync();
 
                 return Ok(new

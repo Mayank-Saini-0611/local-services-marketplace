@@ -1,6 +1,7 @@
-﻿using LocalServices.Api.Data;
+using LocalServices.Api.Data;
 using LocalServices.Api.DTOs;
 using LocalServices.Api.Models;
+using LocalServices.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,10 +14,12 @@ namespace LocalServices.Api.Controllers
     public class ListingsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly ProviderTrustService _providerTrustService;
 
-        public ListingsController(AppDbContext context)
+        public ListingsController(AppDbContext context, ProviderTrustService providerTrustService)
         {
             _context = context;
+            _providerTrustService = providerTrustService;
         }
 
         // ============================================
@@ -99,7 +102,7 @@ namespace LocalServices.Api.Controllers
             // Add ratings data
             var listingIds = listings.Select(l => l.Id).ToList();
             var ratingsData = await _context.Reviews
-                .Where(r => listingIds.Contains(r.ListingId))
+                .Where(r => listingIds.Contains(r.ListingId) && r.ModerationStatus == "published")
                 .GroupBy(r => r.ListingId)
                 .Select(g => new { ListingId = g.Key, Avg = g.Average(r => r.Rating), Count = g.Count() })
                 .ToListAsync();
@@ -110,6 +113,8 @@ namespace LocalServices.Api.Controllers
                 listing.AverageRating = rating != null ? Math.Round(rating.Avg, 1) : 0;
                 listing.ReviewCount = rating?.Count ?? 0;
             }
+
+            await AttachProviderVerificationAsync(listings);
 
             // Return with pagination metadata
             return Ok(new
@@ -166,11 +171,11 @@ namespace LocalServices.Api.Controllers
 
             if (listing != null)
             {
-                var reviews = await _context.Reviews.Where(r => r.ListingId == listing.Id).ToListAsync();
+                var reviews = await _context.Reviews.Where(r => r.ListingId == listing.Id && r.ModerationStatus == "published").ToListAsync();
                 listing.AverageRating = reviews.Any() ? Math.Round(reviews.Average(r => r.Rating), 1) : 0;
                 listing.ReviewCount = reviews.Count;
+                await AttachProviderVerificationAsync(new[] { listing });
             }
-
 
             return Ok(listing);
         }
@@ -217,7 +222,7 @@ namespace LocalServices.Api.Controllers
 
             var listingIds = listings.Select(l => l.Id).ToList();
             var ratingsData = await _context.Reviews
-                .Where(r => listingIds.Contains(r.ListingId))
+                .Where(r => listingIds.Contains(r.ListingId) && r.ModerationStatus == "published")
                 .GroupBy(r => r.ListingId)
                 .Select(g => new { ListingId = g.Key, Avg = g.Average(r => r.Rating), Count = g.Count() })
                 .ToListAsync();
@@ -228,6 +233,8 @@ namespace LocalServices.Api.Controllers
                 listing.AverageRating = rating != null ? Math.Round(rating.Avg, 1) : 0;
                 listing.ReviewCount = rating?.Count ?? 0;
             }
+
+            await AttachProviderVerificationAsync(listings);
 
             return Ok(listings);
         }
@@ -309,6 +316,7 @@ namespace LocalServices.Api.Controllers
                 .FirstAsync();
             createdListing.AverageRating = 0;
             createdListing.ReviewCount = 0;
+            await AttachProviderVerificationAsync(new[] { createdListing });
 
             return CreatedAtAction(nameof(GetListingById), new { id = newListing.Id }, createdListing);
         }
@@ -392,6 +400,19 @@ namespace LocalServices.Api.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Listing deleted successfully." });
+        }
+
+        private async Task AttachProviderVerificationAsync(IEnumerable<ListingResponseDto> listings)
+        {
+            var listingList = listings.ToList();
+            var verificationByProvider = await _providerTrustService.GetForProvidersAsync(
+                listingList.Select(listing => listing.ProviderId));
+
+            foreach (var listing in listingList)
+            {
+                if (verificationByProvider.TryGetValue(listing.ProviderId, out var verification))
+                    listing.ProviderVerification = verification;
+            }
         }
 
         // ============================================

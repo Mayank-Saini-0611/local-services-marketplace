@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { providerApi } from '../api/providerApi';
+import { safetyApi } from '../api/safetyApi';
+import VerificationBadges from '../components/VerificationBadges';
+import SafetyReportModal from '../components/SafetyReportModal';
+import { tokenStorage } from '../utils/tokenStorage';
 import { useTranslation } from 'react-i18next';
 import { 
-  ArrowLeft, Star, MapPin, Briefcase, Calendar, 
-  CheckCircle2, Shield, Mail, Phone, Loader2, Frown
+  ArrowLeft, Star, MapPin, Calendar,
+  Flag, Ban, Loader2, Frown
 } from 'lucide-react';
 
 const getListingImage = (listing) => {
@@ -26,6 +30,7 @@ function ProviderProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const currentUser = tokenStorage.getUser();
 
   const [profile, setProfile] = useState(null);
   const [listings, setListings] = useState([]);
@@ -33,13 +38,12 @@ function ProviderProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('services'); // 'services' or 'reviews'
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockInProgress, setBlockInProgress] = useState(false);
+  const [safetyNotice, setSafetyNotice] = useState(null);
 
-  useEffect(() => {
-    fetchData();
-    window.scrollTo(0, 0);
-  }, [id]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [profileData, listingsData, reviewsData] = await Promise.all([
@@ -55,6 +59,53 @@ function ProviderProfile() {
       setError('Provider not found or an error occurred.');
     } finally {
       setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchData();
+    }, 0);
+    window.scrollTo(0, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchData]);
+
+  useEffect(() => {
+    let active = true;
+    safetyApi.getBlockedUsers()
+      .then((blocks) => {
+        if (active) setIsBlocked(blocks.some((block) => String(block.userId) === String(id)));
+      })
+      .catch(() => {
+        // The public profile remains usable if the optional block lookup fails.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handleBlockToggle = async () => {
+    if (!profile || blockInProgress) return;
+    const action = isBlocked ? 'unblock' : 'block';
+    if (!window.confirm(`Are you sure you want to ${action} ${profile.fullName}?`)) return;
+
+    setBlockInProgress(true);
+    try {
+      if (isBlocked) {
+        await safetyApi.unblockUser(profile.id);
+        setIsBlocked(false);
+        setSafetyNotice(`${profile.fullName} has been unblocked.`);
+      } else {
+        await safetyApi.blockUser(profile.id);
+        setIsBlocked(true);
+        setSafetyNotice(`${profile.fullName} has been blocked. New messages and bookings are disabled.`);
+      }
+    } catch (requestError) {
+      setSafetyNotice(requestError.response?.data?.message || `Unable to ${action} this provider.`);
+    } finally {
+      setBlockInProgress(false);
     }
   };
 
@@ -93,11 +144,15 @@ function ProviderProfile() {
             <div className="flex-1 text-center md:text-left mt-2 md:mt-0">
               <h1 className="text-3xl font-bold text-slate-900 flex items-center justify-center md:justify-start gap-2">
                 {profile.fullName}
-                {profile.kycStatus === 'verified' && <Shield className="w-6 h-6 text-blue-500 fill-blue-500" title="Verified Professional" />}
               </h1>
               <p className="text-slate-500 mt-1 flex items-center justify-center md:justify-start gap-4">
                 <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> Member since {new Date(profile.memberSince).getFullYear()}</span>
               </p>
+              <VerificationBadges
+                verification={profile.verification}
+                legacyKycStatus={profile.kycStatus}
+                className="mt-3 justify-center md:justify-start"
+              />
             </div>
             {/* Quick Stats in Header */}
                         {/* Quick Stats in Header */}
@@ -117,6 +172,30 @@ function ProviderProfile() {
           </div>
         </div>
       </div>
+
+      {String(currentUser?.userId) !== String(profile.id) && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {safetyNotice && (
+            <p className="mr-auto text-sm text-slate-600 dark:text-slate-300" role="status">{safetyNotice}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowReportModal(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/30"
+          >
+            <Flag className="h-4 w-4" /> Report provider
+          </button>
+          <button
+            type="button"
+            onClick={handleBlockToggle}
+            disabled={blockInProgress}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {blockInProgress ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+            {isBlocked ? 'Unblock provider' : 'Block provider'}
+          </button>
+        </div>
+      )}
 
       {/* TABS */}
       <div className="flex border-b border-slate-200">
@@ -148,8 +227,14 @@ function ProviderProfile() {
                   <img src={getListingImage(listing)} alt={listing.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   <span className="absolute bottom-3 left-3 px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-semibold text-violet-700 rounded-full">{listing.categoryName}</span>
                 </div>
-                <div className="p-4">
+                  <div className="p-4">
                   <h3 className="font-bold text-slate-900 line-clamp-1 group-hover:text-violet-600 mb-2">{listing.title}</h3>
+                  <VerificationBadges
+                    verification={listing.providerVerification}
+                    legacyKycStatus={listing.providerKycStatus}
+                    compact
+                    className="mb-2"
+                  />
                   <div className="flex items-center gap-2 mb-3 text-xs text-slate-500">
                     <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                     <span className="font-semibold text-slate-700">{listing.averageRating > 0 ? listing.averageRating.toFixed(1) : 'New'}</span>
@@ -201,6 +286,15 @@ function ProviderProfile() {
             </div>
           )}
         </div>
+      )}
+
+      {showReportModal && (
+        <SafetyReportModal
+          reportedUserId={profile.id}
+          reportedUserName={profile.fullName}
+          onClose={() => setShowReportModal(false)}
+          onComplete={setSafetyNotice}
+        />
       )}
     </div>
   );

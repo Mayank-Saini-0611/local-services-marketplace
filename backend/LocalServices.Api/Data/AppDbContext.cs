@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using LocalServices.Api.Models;
 
 namespace LocalServices.Api.Data
@@ -31,6 +31,8 @@ namespace LocalServices.Api.Data
 
         public DbSet<Coupon> Coupons { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<UserReport> UserReports { get; set; }
+        public DbSet<UserBlock> UserBlocks { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -71,6 +73,40 @@ namespace LocalServices.Api.Data
                 .HasOne(b => b.Customer)
                 .WithMany(u => u.Bookings)
                 .HasForeignKey(b => b.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserReport>()
+                .HasOne(r => r.Reporter)
+                .WithMany()
+                .HasForeignKey(r => r.ReporterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserReport>()
+                .HasOne(r => r.ReportedUser)
+                .WithMany()
+                .HasForeignKey(r => r.ReportedUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserReport>()
+                .HasOne(r => r.Listing)
+                .WithMany()
+                .HasForeignKey(r => r.ListingId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<UserBlock>()
+                .HasIndex(b => new { b.BlockerId, b.BlockedUserId })
+                .IsUnique();
+
+            modelBuilder.Entity<UserBlock>()
+                .HasOne(b => b.Blocker)
+                .WithMany()
+                .HasForeignKey(b => b.BlockerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserBlock>()
+                .HasOne(b => b.BlockedUser)
+                .WithMany()
+                .HasForeignKey(b => b.BlockedUserId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }

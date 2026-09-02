@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../api/adminApi';
 import { 
   ShieldCheck, CheckCircle2, XCircle, Loader2, 
-  Eye, FileX, ExternalLink, X, ZoomIn, User, Mail
+  Eye, FileX, ExternalLink, X
 } from 'lucide-react';
 
 function AdminKyc() {
@@ -12,11 +12,12 @@ function AdminKyc() {
   const [selectedReq, setSelectedReq] = useState(null);
   const [processingId, setProcessingId] = useState(null);
 
-  useEffect(() => {
-    fetchRequests();
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     try {
       const data = await adminApi.getKycRequests();
       setRequests(data);
@@ -26,12 +27,15 @@ function AdminKyc() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    const refreshTimer = window.setTimeout(() => {
+      void fetchRequests();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [fetchRequests]);
 
   const handleStatusUpdate = async (id, status) => {
     setProcessingId(id);

@@ -133,35 +133,43 @@ namespace LocalServices.Api.Controllers
 
             if (generatedSignature.Equals(dto.RazorpaySignature, StringComparison.OrdinalIgnoreCase))
             {
-                // Signature Valid! Update Payment Record
-                var payment = await _context.Payments.FirstOrDefaultAsync(p => p.RazorpayOrderId == dto.RazorpayOrderId);
-                if (payment != null)
-                {
-                    payment.RazorpayPaymentId = dto.RazorpayPaymentId;
-                    payment.RazorpaySignature = dto.RazorpaySignature;
-                    payment.Status = "captured";
-                    payment.UpdatedAt = DateTime.UtcNow;
-                }
+                // The order record is the source of truth for both the booking and amount.
+                var payment = await _context.Payments
+                    .FirstOrDefaultAsync(p => p.RazorpayOrderId == dto.RazorpayOrderId);
+                if (payment == null)
+                    return NotFound(new { message = "Payment order not found." });
 
-                // Update Booking Status to Accepted/Paid
+                if (payment.BookingId != dto.BookingId)
+                    return BadRequest(new { message = "Payment order does not belong to this booking." });
+
+                // A valid signature must only be able to confirm the customer's own booking.
                 var booking = await _context.Bookings
                     .Include(b => b.Listing)
-                    .FirstOrDefaultAsync(b => b.Id == dto.BookingId);
+                    .FirstOrDefaultAsync(b => b.Id == payment.BookingId);
 
-                if (booking != null)
-                {
-                    booking.Status = "accepted"; // Paid bookings automatically become accepted
-                    booking.UpdatedAt = DateTime.UtcNow;
+                if (booking == null)
+                    return NotFound(new { message = "Booking not found." });
 
-                    // Send real-time notification to Provider
-                    await _notificationService.SendNotificationAsync(
-                        userId: booking.Listing!.ProviderId,
-                        type: "booking_paid",
-                        title: "Payment Received! 💳",
-                        message: $"Payment of ₹{payment?.Amount} received for '{booking.Listing.Title}'",
-                        link: "/dashboard/bookings"
-                    );
-                }
+                if (booking.CustomerId != userId.Value)
+                    return Forbid();
+
+                payment.RazorpayPaymentId = dto.RazorpayPaymentId;
+                payment.RazorpaySignature = dto.RazorpaySignature;
+                payment.Status = "captured";
+                payment.UpdatedAt = DateTime.UtcNow;
+
+                // Update Booking Status to Accepted/Paid
+                booking.Status = "accepted"; // Paid bookings automatically become accepted
+                booking.UpdatedAt = DateTime.UtcNow;
+
+                // Send real-time notification to Provider
+                await _notificationService.SendNotificationAsync(
+                    userId: booking.Listing!.ProviderId,
+                    type: "booking_paid",
+                    title: "Payment Received! 💳",
+                    message: $"Payment of ₹{payment.Amount} received for '{booking.Listing.Title}'",
+                    link: "/dashboard/bookings"
+                );
 
                 await _context.SaveChangesAsync();
 
