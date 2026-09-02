@@ -24,10 +24,13 @@ import AdminKyc from './pages/AdminKyc.jsx';
 import NotificationToast from './components/NotificationToast.jsx';
 import ChatToast from './components/ChatToast.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
+import FloatingThemeToggle from './components/FloatingThemeToggle.jsx';
 
 function App() {
   return (
     <BrowserRouter>
+      {/* Theme switch for the public pages (login / register / etc.) */}
+      <FloatingThemeToggle />
       <NotificationToast />
       <ChatToast />
       <Routes>
